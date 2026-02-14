@@ -1,0 +1,546 @@
+<TaskerData sr="" dvi="1" tv="6.6.19">
+<Profile sr="prof0" ve="2">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>100</id>
+<mid0>200</mid0>
+<nme>KB SMS</nme>
+<Event sr="con0" ve="2">
+<code>7</code>
+<pri>0</pri>
+<Str sr="arg0" ve="3"/>
+<Str sr="arg1" ve="3">*[KB]*잔액*</Str>
+<Int sr="arg2" val="0"/>
+</Event>
+</Profile>
+<Profile sr="prof1" ve="2">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>101</id>
+<mid0>201</mid0>
+<nme>하나 SMS</nme>
+<Event sr="con0" ve="2">
+<code>7</code>
+<pri>0</pri>
+<Str sr="arg0" ve="3"/>
+<Str sr="arg1" ve="3">*하나*잔액*</Str>
+<Int sr="arg2" val="0"/>
+</Event>
+</Profile>
+<Profile sr="prof2" ve="2">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>102</id>
+<mid0>202</mid0>
+<nme>신협 SMS</nme>
+<Event sr="con0" ve="2">
+<code>7</code>
+<pri>0</pri>
+<Str sr="arg0" ve="3"/>
+<Str sr="arg1" ve="3">*입출금안내*잔액*</Str>
+<Int sr="arg2" val="0"/>
+</Event>
+</Profile>
+<Profile sr="prof3" ve="2">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>103</id>
+<mid0>203</mid0>
+<nme>신한 알림</nme>
+<Event sr="con0" ve="2">
+<code>461</code>
+<pri>0</pri>
+</Event>
+</Profile>
+<Project sr="proj0" ve="2">
+<cdate>1739404800000</cdate>
+<name>BankTotal</name>
+<pids>100,101,102,103</pids>
+<tids>200,201,202,203,210,220,230</tids>
+</Project>
+<Task sr="task0">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>200</id>
+<nme>KB파싱</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Str sr="arg1" ve="3">%SMSRB</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="1"/>
+<Str sr="arg3" ve="3">잔액\s*([\d,]+)</Str>
+<Str sr="arg4" ve="3">$1</Str>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act2" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3">,</Str>
+<Str sr="arg4" ve="3"/>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act3" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%KBBalance</Str>
+<Str sr="arg1" ve="3">%sms_body</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act4" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%KBUpdated</Str>
+<Str sr="arg1" ve="3">%TIME</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act5" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+</Task>
+<Task sr="task1">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>201</id>
+<nme>하나파싱</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Str sr="arg1" ve="3">%SMSRB</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="1"/>
+<Str sr="arg3" ve="3">잔액\s*([\d,]+)원</Str>
+<Str sr="arg4" ve="3">$1</Str>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act2" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3">,</Str>
+<Str sr="arg4" ve="3"/>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act3" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%HanaBalance</Str>
+<Str sr="arg1" ve="3">%sms_body</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act4" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%HanaUpdated</Str>
+<Str sr="arg1" ve="3">%TIME</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act5" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+</Task>
+<Task sr="task2">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>202</id>
+<nme>신협파싱</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Str sr="arg1" ve="3">%SMSRB</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="1"/>
+<Str sr="arg3" ve="3">잔액\s*([\d,]+)원</Str>
+<Str sr="arg4" ve="3">$1</Str>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act2" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%sms_body</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3">,</Str>
+<Str sr="arg4" ve="3"/>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act3" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhyupBalance</Str>
+<Str sr="arg1" ve="3">%sms_body</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act4" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhyupUpdated</Str>
+<Str sr="arg1" ve="3">%TIME</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act5" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+</Task>
+<Task sr="task3">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>203</id>
+<nme>신한파싱</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%notif_text</Str>
+<Str sr="arg1" ve="3">%evtprm2 %evtprm3</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%notif_text</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="1"/>
+<Str sr="arg3" ve="3">잔액\s*([\d.,]+)원</Str>
+<Str sr="arg4" ve="3">$1</Str>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act2" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%notif_text</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3">\.</Str>
+<Str sr="arg4" ve="3"/>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act3" ve="7">
+<code>598</code>
+<Str sr="arg0" ve="3">%notif_text</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3">,</Str>
+<Str sr="arg4" ve="3"/>
+<Str sr="arg5" ve="3"/>
+<Str sr="arg6" ve="3"/>
+</Action>
+<Action sr="act4" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhanBalance</Str>
+<Str sr="arg1" ve="3">%notif_text</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act5" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhanUpdated</Str>
+<Str sr="arg1" ve="3">%TIME</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act6" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+</Task>
+<Task sr="task4">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>210</id>
+<nme>위젯업데이트</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%kb</Str>
+<Str sr="arg1" ve="3">%KBBalance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%kb</Str>
+<Int sr="arg1" val="13"/>
+<Str sr="arg2" ve="3">%KBBalance</Str>
+</Action>
+<Action sr="act2" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%kb</Str>
+<Str sr="arg1" ve="3">0</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act3" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act4" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%hana</Str>
+<Str sr="arg1" ve="3">%HanaBalance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act5" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%hana</Str>
+<Int sr="arg1" val="13"/>
+<Str sr="arg2" ve="3">%HanaBalance</Str>
+</Action>
+<Action sr="act6" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%hana</Str>
+<Str sr="arg1" ve="3">0</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act7" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act8" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%shinhyup</Str>
+<Str sr="arg1" ve="3">%ShinhyupBalance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act9" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%shinhyup</Str>
+<Int sr="arg1" val="13"/>
+<Str sr="arg2" ve="3">%ShinhyupBalance</Str>
+</Action>
+<Action sr="act10" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%shinhyup</Str>
+<Str sr="arg1" ve="3">0</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act11" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act12" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%shinhan</Str>
+<Str sr="arg1" ve="3">%ShinhanBalance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act13" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%shinhan</Str>
+<Int sr="arg1" val="13"/>
+<Str sr="arg2" ve="3">%ShinhanBalance</Str>
+</Action>
+<Action sr="act14" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%shinhan</Str>
+<Str sr="arg1" ve="3">0</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act15" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act16" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%TotalBalance</Str>
+<Str sr="arg1" ve="3">%kb + %hana + %shinhyup + %shinhan</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="1"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act17" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%LastUpdate</Str>
+<Str sr="arg1" ve="3">%DATE %TIME</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act18" ve="7">
+<code>548</code>
+<Str sr="arg0" ve="3">총잔액: %TotalBalance원</Str>
+<Int sr="arg1" val="0"/>
+</Action>
+</Task>
+<Task sr="task5">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>220</id>
+<nme>BankTotal위젯</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>548</code>
+<Str sr="arg0" ve="3">총:%TotalBalance KB:%KBBalance 하나:%HanaBalance 신협:%ShinhyupBalance 신한:%ShinhanBalance (%LastUpdate)</Str>
+<Int sr="arg1" val="1"/>
+</Action>
+</Task>
+<Task sr="task6">
+<cdate>1739404800000</cdate>
+<edate>1739404800000</edate>
+<id>230</id>
+<nme>수동입력</nme>
+<pri>6</pri>
+<Action sr="act0" ve="7">
+<code>551</code>
+<Str sr="arg0" ve="3">은행선택</Str>
+<Str sr="arg1" ve="3">KB,하나,신협,신한</Str>
+<Int sr="arg2" val="1"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+<Action sr="act1" ve="7">
+<code>544</code>
+<Str sr="arg0" ve="3">%input_balance</Str>
+<Str sr="arg1" ve="3">잔액입력</Str>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+<Action sr="act2" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%val</Str>
+<Int sr="arg1" val="0"/>
+<Str sr="arg2" ve="3">KB</Str>
+</Action>
+<Action sr="act3" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%KBBalance</Str>
+<Str sr="arg1" ve="3">%input_balance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act4" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act5" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%val</Str>
+<Int sr="arg1" val="0"/>
+<Str sr="arg2" ve="3">하나</Str>
+</Action>
+<Action sr="act6" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%HanaBalance</Str>
+<Str sr="arg1" ve="3">%input_balance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act7" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act8" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%val</Str>
+<Int sr="arg1" val="0"/>
+<Str sr="arg2" ve="3">신협</Str>
+</Action>
+<Action sr="act9" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhyupBalance</Str>
+<Str sr="arg1" ve="3">%input_balance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act10" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act11" ve="7">
+<code>37</code>
+<Str sr="arg0" ve="3">%val</Str>
+<Int sr="arg1" val="0"/>
+<Str sr="arg2" ve="3">신한</Str>
+</Action>
+<Action sr="act12" ve="7">
+<code>547</code>
+<Str sr="arg0" ve="3">%ShinhanBalance</Str>
+<Str sr="arg1" ve="3">%input_balance</Str>
+<Int sr="arg2" val="0"/>
+<Int sr="arg3" val="0"/>
+<Int sr="arg4" val="0"/>
+</Action>
+<Action sr="act13" ve="7">
+<code>38</code>
+</Action>
+<Action sr="act14" ve="7">
+<code>130</code>
+<Str sr="arg0" ve="3">위젯업데이트</Str>
+<Int sr="arg1" val="0"/>
+<Int sr="arg2" val="0"/>
+<Str sr="arg3" ve="3"/>
+</Action>
+</Task>
+</TaskerData>

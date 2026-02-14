@@ -1,0 +1,99 @@
+package com.banktotal.app.service
+
+import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
+import com.banktotal.app.data.parser.ParsedTransaction
+import com.banktotal.app.data.parser.ShinhanNotificationParser
+import com.banktotal.app.data.repository.AccountRepository
+import com.banktotal.app.widget.WidgetUpdateHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+class BankNotificationListenerService : NotificationListenerService() {
+
+    private val shinhanParser = ShinhanNotificationParser()
+
+    // 삼성 메시지 패키지 (RCS/SMS 모두 처리)
+    private val messagingPackages = setOf(
+        "com.samsung.android.messaging",
+        "com.google.android.apps.messaging",
+        "com.android.mms"
+    )
+
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        sbn ?: return
+        val packageName = sbn.packageName ?: return
+
+        val extras = sbn.notification.extras
+        val title = extras.getString("android.title") ?: ""
+        val text = extras.getCharSequence("android.text")?.toString() ?: ""
+
+        val parsed: ParsedTransaction?
+
+        if (shinhanParser.canParse(packageName)) {
+            // 신한 앱 알림
+            parsed = shinhanParser.parse(title, text)
+        } else if (packageName in messagingPackages) {
+            // 삼성/구글 메시지 앱 알림 (SMS/RCS)
+            parsed = parseMessageNotification(title, text)
+        } else {
+            return
+        }
+
+        parsed ?: return
+
+        val repository = AccountRepository(applicationContext)
+        CoroutineScope(Dispatchers.IO).launch {
+            repository.upsertFromSms(
+                bankName = parsed.bankName,
+                accountNumber = parsed.accountNumber,
+                balance = parsed.balance,
+                transactionType = parsed.transactionType,
+                transactionAmount = parsed.transactionAmount
+            )
+            WidgetUpdateHelper.updateWidget(applicationContext)
+            BalanceNotificationHelper.update(applicationContext)
+        }
+    }
+
+    private fun parseMessageNotification(title: String, text: String): ParsedTransaction? {
+        val content = "$title $text"
+        if (!content.contains("잔액")) return null
+
+        val balanceRegex = Regex("""잔액\s*([\d,]+)원?""")
+        val balanceMatch = balanceRegex.find(content) ?: return null
+        val balance = balanceMatch.groupValues[1].replace(",", "").toLongOrNull() ?: return null
+
+        val accountRegex = Regex("""(\d{3,4}-?\*+\d{1,4}|\d+\*+\d+)""")
+        val accountNumber = accountRegex.find(content)?.value ?: ""
+
+        val isDeposit = content.contains("입금")
+        val transactionType = if (isDeposit) "입금" else "출금"
+
+        val amountRegex = if (isDeposit) {
+            Regex("""입금\s*([\d,]+)원?""")
+        } else {
+            Regex("""출금\s*([\d,]+)원?|금액\s*([\d,]+)원?""")
+        }
+        val amountMatch = amountRegex.find(content)
+        val amountStr = amountMatch?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() } ?: "0"
+        val amount = amountStr.replace(",", "").toLongOrNull() ?: 0L
+
+        // 은행 식별
+        val bankName = when {
+            content.contains("[KB]") || content.contains("국민") -> "KB국민"
+            content.contains("하나") -> "하나"
+            content.contains("입출금안내") || content.contains("신협") -> "신협"
+            else -> return null
+        }
+
+        return ParsedTransaction(
+            bankName = bankName,
+            accountNumber = accountNumber.ifEmpty { "${bankName}계좌" },
+            balance = balance,
+            transactionType = transactionType,
+            transactionAmount = amount
+        )
+    }
+}

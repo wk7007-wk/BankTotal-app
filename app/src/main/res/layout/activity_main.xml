@@ -43,6 +43,16 @@
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
+    <!-- 스캔 프로그레스바 -->
+    <ProgressBar
+        android:id="@+id/progressScan"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/header" />
+
     <!-- 계좌 목록 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvAccounts"
@@ -51,8 +61,8 @@
         android:layout_marginTop="8dp"
         android:padding="8dp"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@id/header"
-        app:layout_constraintBottom_toTopOf="@id/btnAdd" />
+        app:layout_constraintTop_toBottomOf="@id/progressScan"
+        app:layout_constraintBottom_toTopOf="@id/btnTest" />
 
     <!-- SMS 테스트 버튼 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -66,6 +76,20 @@
         app:tint="#FFFFFF"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- SMS 스캔 버튼 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnScanSms"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:src="@android:drawable/ic_popup_sync"
+        android:contentDescription="SMS 기록 스캔"
+        app:backgroundTint="#4CAF50"
+        app:tint="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/btnTest"
+        app:layout_constraintEnd_toStartOf="@id/btnAdd" />
 
     <!-- 계좌 추가 버튼 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton

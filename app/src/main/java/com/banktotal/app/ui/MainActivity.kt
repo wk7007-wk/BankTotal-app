@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.view.LayoutInflater
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -41,7 +42,9 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val allGranted = permissions.values.all { it }
-        if (!allGranted) {
+        if (allGranted) {
+            viewModel.runFirstScanIfNeeded()
+        } else {
             AlertDialog.Builder(this)
                 .setTitle("권한 필요")
                 .setMessage("SMS 수신 권한이 없으면 은행 문자를 자동으로 읽을 수 없습니다.")
@@ -61,6 +64,22 @@ class MainActivity : AppCompatActivity() {
         observeData()
         setupButtons()
         requestPermissions()
+
+        handleScanIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleScanIntent(intent)
+    }
+
+    private fun handleScanIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("action_scan_sms", false) == true) {
+            if (hasSmsPermission()) {
+                viewModel.scanSmsHistory()
+            }
+            intent.removeExtra("action_scan_sms")
+        }
     }
 
     private fun setupRecyclerView() {
@@ -76,7 +95,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.allAccounts.observe(this) { accounts ->
             adapter.submitList(accounts)
 
-            // 마지막 업데이트 시각
             val lastUpdate = accounts.maxOfOrNull { it.lastUpdated } ?: 0L
             binding.tvLastUpdated.text = if (lastUpdate > 0) {
                 "마지막 업데이트: ${dateFormat.format(Date(lastUpdate))}"
@@ -89,11 +107,49 @@ class MainActivity : AppCompatActivity() {
             val balance = total ?: 0L
             binding.tvTotalBalance.text = "${decimalFormat.format(balance)}원"
         }
+
+        viewModel.isScanning.observe(this) { scanning ->
+            binding.progressScan.visibility = if (scanning) View.VISIBLE else View.GONE
+            binding.btnScanSms.isEnabled = !scanning
+        }
+
+        viewModel.scanResult.observe(this) { result ->
+            result ?: return@observe
+            val msg = "SMS 스캔 완료\n" +
+                "전체 SMS: ${result.totalSmsRead}건\n" +
+                "은행 SMS: ${result.bankSmsFound}건\n" +
+                "계좌 업데이트: ${result.accountsUpdated}건"
+
+            AlertDialog.Builder(this)
+                .setTitle("스캔 결과")
+                .setMessage(if (result.errors.isNotEmpty()) {
+                    "$msg\n\n오류:\n${result.errors.joinToString("\n")}"
+                } else msg)
+                .setPositiveButton("확인", null)
+                .show()
+
+            viewModel.clearScanResult()
+        }
     }
 
     private fun setupButtons() {
         binding.btnAdd.setOnClickListener { showAddDialog() }
         binding.btnTest.setOnClickListener { showTestMenu() }
+        binding.btnScanSms.setOnClickListener {
+            if (hasSmsPermission()) {
+                viewModel.scanSmsHistory()
+            } else {
+                smsPermissionLauncher.launch(arrayOf(
+                    Manifest.permission.RECEIVE_SMS,
+                    Manifest.permission.READ_SMS
+                ))
+            }
+        }
+    }
+
+    private fun hasSmsPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     private fun showTestMenu() {
@@ -138,7 +194,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 신한 알림 테스트
         val shinhanResult = shinhanParser.parse("신한은행", "456-***-321 입금 1,000,000원 잔액 5,000,000원")
         if (shinhanResult != null) {
             successCount++
@@ -153,7 +208,6 @@ class MainActivity : AppCompatActivity() {
 
         results.append("결과: $successCount/4 성공")
 
-        // DB 저장 테스트
         AlertDialog.Builder(this)
             .setTitle("SMS 파싱 테스트 결과")
             .setMessage(results.toString())
@@ -211,7 +265,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // NotificationListenerService 권한 상태
         val listenerEnabled = isNotificationListenerEnabled()
         results.append("---\n")
         results.append("알림 리스너 권한: ${if (listenerEnabled) "활성화" else "비활성화"}\n")
@@ -346,7 +399,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        // SMS 권한 요청
         val smsPermissions = arrayOf(
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS
@@ -358,9 +410,10 @@ class MainActivity : AppCompatActivity() {
 
         if (needSmsPermission) {
             smsPermissionLauncher.launch(smsPermissions)
+        } else {
+            viewModel.runFirstScanIfNeeded()
         }
 
-        // 알림 접근 권한 확인
         if (!isNotificationListenerEnabled()) {
             AlertDialog.Builder(this)
                 .setTitle("알림 접근 권한")

@@ -49,7 +49,6 @@ object BalanceNotificationHelper {
             val accounts = dao.getAllAccountsSync()
             val now = dateFormat.format(Date())
 
-            // 은행별 잔액 요약
             val parts = mutableListOf<String>()
             for (bank in bankOrder) {
                 val acc = accounts.find { it.bankName == bank && it.isActive }
@@ -63,9 +62,20 @@ object BalanceNotificationHelper {
             parts.add(now)
             val content = parts.joinToString(" | ")
 
-            val intent = Intent(context, MainActivity::class.java)
-            val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+            // 앱 열기 인텐트
+            val openIntent = Intent(context, MainActivity::class.java)
+            val openPendingIntent = PendingIntent.getActivity(
+                context, 0, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // 업데이트(스캔) 인텐트
+            val scanIntent = Intent(context, MainActivity::class.java).apply {
+                putExtra("action_scan_sms", true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val scanPendingIntent = PendingIntent.getActivity(
+                context, 1, scanIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -78,7 +88,12 @@ object BalanceNotificationHelper {
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOnlyAlertOnce(true)
-                .setContentIntent(pendingIntent)
+                .setContentIntent(openPendingIntent)
+                .addAction(
+                    android.R.drawable.ic_popup_sync,
+                    "업데이트",
+                    scanPendingIntent
+                )
                 .build()
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

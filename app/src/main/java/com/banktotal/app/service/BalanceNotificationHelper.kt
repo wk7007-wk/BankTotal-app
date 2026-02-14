@@ -71,7 +71,7 @@ object BalanceNotificationHelper {
 
             // 업데이트(스캔) 인텐트
             val scanIntent = Intent(context, MainActivity::class.java).apply {
-                putExtra("action_scan_sms", true)
+                putExtra("action_refresh", true)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
             val scanPendingIntent = PendingIntent.getActivity(

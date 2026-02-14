@@ -5,6 +5,7 @@ import androidx.lifecycle.LiveData
 import com.banktotal.app.data.db.AccountDao
 import com.banktotal.app.data.db.AccountEntity
 import com.banktotal.app.data.db.BankDatabase
+import com.banktotal.app.service.BalanceNotificationHelper
 import com.banktotal.app.widget.WidgetUpdateHelper
 
 class AccountRepository(private val context: Context) {
@@ -13,6 +14,11 @@ class AccountRepository(private val context: Context) {
     fun getAllAccounts(): LiveData<List<AccountEntity>> = dao.getAllAccounts()
     fun getActiveAccounts(): LiveData<List<AccountEntity>> = dao.getActiveAccounts()
     fun getTotalBalance(): LiveData<Long?> = dao.getTotalBalance()
+
+    private fun refreshDisplays() {
+        WidgetUpdateHelper.updateWidget(context)
+        BalanceNotificationHelper.update(context)
+    }
 
     suspend fun upsertFromSms(
         bankName: String,
@@ -43,7 +49,7 @@ class AccountRepository(private val context: Context) {
                 )
             )
         }
-        WidgetUpdateHelper.updateWidget(context)
+        refreshDisplays()
     }
 
     suspend fun addManualAccount(
@@ -62,22 +68,27 @@ class AccountRepository(private val context: Context) {
                 lastUpdated = System.currentTimeMillis()
             )
         )
-        WidgetUpdateHelper.updateWidget(context)
+        refreshDisplays()
     }
 
     suspend fun updateAccount(account: AccountEntity) {
         dao.update(account.copy(lastUpdated = System.currentTimeMillis()))
-        WidgetUpdateHelper.updateWidget(context)
+        refreshDisplays()
     }
 
     suspend fun deleteAccount(account: AccountEntity) {
         dao.delete(account)
-        WidgetUpdateHelper.updateWidget(context)
+        refreshDisplays()
     }
 
     suspend fun toggleActive(account: AccountEntity) {
         dao.update(account.copy(isActive = !account.isActive))
-        WidgetUpdateHelper.updateWidget(context)
+        refreshDisplays()
+    }
+
+    suspend fun deleteAll() {
+        dao.deleteAll()
+        refreshDisplays()
     }
 
     suspend fun getTotalBalanceSync(): Long = dao.getTotalBalanceSync() ?: 0L

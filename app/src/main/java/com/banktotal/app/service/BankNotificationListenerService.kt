@@ -5,7 +5,6 @@ import android.service.notification.StatusBarNotification
 import com.banktotal.app.data.parser.ParsedTransaction
 import com.banktotal.app.data.parser.ShinhanNotificationParser
 import com.banktotal.app.data.repository.AccountRepository
-import com.banktotal.app.widget.WidgetUpdateHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,8 +51,6 @@ class BankNotificationListenerService : NotificationListenerService() {
                 transactionType = parsed.transactionType,
                 transactionAmount = parsed.transactionAmount
             )
-            WidgetUpdateHelper.updateWidget(applicationContext)
-            BalanceNotificationHelper.update(applicationContext)
         }
     }
 

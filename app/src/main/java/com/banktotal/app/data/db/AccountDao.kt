@@ -37,4 +37,7 @@ interface AccountDao {
 
     @Query("SELECT * FROM accounts ORDER BY bank_name")
     suspend fun getAllAccountsSync(): List<AccountEntity>
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAll()
 }

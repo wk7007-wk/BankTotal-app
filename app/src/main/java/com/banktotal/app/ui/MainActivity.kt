@@ -21,6 +21,7 @@ import com.banktotal.app.data.parser.ShinhanNotificationParser
 import com.banktotal.app.data.repository.AccountRepository
 import com.banktotal.app.databinding.ActivityMainBinding
 import com.banktotal.app.databinding.DialogAccountBinding
+import com.banktotal.app.service.BalanceNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,9 +43,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            viewModel.runFirstScanIfNeeded()
-        } else {
+        if (!allGranted) {
             AlertDialog.Builder(this)
                 .setTitle("권한 필요")
                 .setMessage("SMS 수신 권한이 없으면 은행 문자를 자동으로 읽을 수 없습니다.")
@@ -65,20 +64,16 @@ class MainActivity : AppCompatActivity() {
         setupButtons()
         requestPermissions()
 
-        handleScanIntent(intent)
+        // 알림 업데이트
+        BalanceNotificationHelper.update(this)
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        handleScanIntent(intent)
-    }
-
-    private fun handleScanIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra("action_scan_sms", false) == true) {
-            if (hasSmsPermission()) {
-                viewModel.scanSmsHistory()
-            }
-            intent.removeExtra("action_scan_sms")
+        // 알림 "업데이트" 버튼에서 왔을 때 알림 갱신
+        if (intent?.getBooleanExtra("action_refresh", false) == true) {
+            BalanceNotificationHelper.update(this)
+            intent.removeExtra("action_refresh")
         }
     }
 
@@ -107,49 +102,37 @@ class MainActivity : AppCompatActivity() {
             val balance = total ?: 0L
             binding.tvTotalBalance.text = "${decimalFormat.format(balance)}원"
         }
-
-        viewModel.isScanning.observe(this) { scanning ->
-            binding.progressScan.visibility = if (scanning) View.VISIBLE else View.GONE
-            binding.btnScanSms.isEnabled = !scanning
-        }
-
-        viewModel.scanResult.observe(this) { result ->
-            result ?: return@observe
-            val msg = "SMS 스캔 완료\n" +
-                "전체 SMS: ${result.totalSmsRead}건\n" +
-                "은행 SMS: ${result.bankSmsFound}건\n" +
-                "계좌 업데이트: ${result.accountsUpdated}건"
-
-            AlertDialog.Builder(this)
-                .setTitle("스캔 결과")
-                .setMessage(if (result.errors.isNotEmpty()) {
-                    "$msg\n\n오류:\n${result.errors.joinToString("\n")}"
-                } else msg)
-                .setPositiveButton("확인", null)
-                .show()
-
-            viewModel.clearScanResult()
-        }
     }
 
     private fun setupButtons() {
         binding.btnAdd.setOnClickListener { showAddDialog() }
         binding.btnTest.setOnClickListener { showTestMenu() }
-        binding.btnScanSms.setOnClickListener {
-            if (hasSmsPermission()) {
-                viewModel.scanSmsHistory()
-            } else {
-                smsPermissionLauncher.launch(arrayOf(
-                    Manifest.permission.RECEIVE_SMS,
-                    Manifest.permission.READ_SMS
-                ))
-            }
-        }
+        binding.btnScanSms.setOnClickListener { showSettingsMenu() }
     }
 
-    private fun hasSmsPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
-            PackageManager.PERMISSION_GRANTED
+    private fun showSettingsMenu() {
+        val options = arrayOf("데이터 전체 초기화", "알림 접근 권한 설정")
+        AlertDialog.Builder(this)
+            .setTitle("설정")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> confirmDeleteAll()
+                    1 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            }
+            .show()
+    }
+
+    private fun confirmDeleteAll() {
+        AlertDialog.Builder(this)
+            .setTitle("데이터 초기화")
+            .setMessage("모든 계좌 데이터를 삭제하시겠습니까?\n알림으로 새로 수신되면 자동으로 다시 등록됩니다.")
+            .setPositiveButton("삭제") { _, _ ->
+                viewModel.deleteAllAccounts()
+                Toast.makeText(this, "모든 데이터가 초기화되었습니다.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showTestMenu() {
@@ -169,7 +152,6 @@ class MainActivity : AppCompatActivity() {
     private fun runSmsParsingTest() {
         val parserManager = SmsParserManager()
         val shinhanParser = ShinhanNotificationParser()
-        val repository = AccountRepository(applicationContext)
 
         val testCases = listOf(
             Triple("KB", "15880000", "[KB]입금 500,000원 123-***-456 잔액1,234,567원"),
@@ -211,31 +193,12 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("SMS 파싱 테스트 결과")
             .setMessage(results.toString())
-            .setPositiveButton("DB에 저장 테스트") { _, _ ->
-                CoroutineScope(Dispatchers.IO).launch {
-                    for ((_, sender, body) in testCases) {
-                        val parsed = parserManager.parse(sender, body) ?: continue
-                        repository.upsertFromSms(
-                            parsed.bankName, parsed.accountNumber,
-                            parsed.balance, parsed.transactionType, parsed.transactionAmount
-                        )
-                    }
-                    val sr = shinhanParser.parse("신한은행", "456-***-321 입금 1,000,000원 잔액 5,000,000원")
-                    if (sr != null) {
-                        repository.upsertFromSms(sr.bankName, sr.accountNumber, sr.balance, sr.transactionType, sr.transactionAmount)
-                    }
-                    launch(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "4개 테스트 계좌 DB 저장 완료!", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            .setNegativeButton("닫기", null)
+            .setPositiveButton("확인", null)
             .show()
     }
 
     private fun runShinhanNotificationTest() {
         val parser = ShinhanNotificationParser()
-        val repository = AccountRepository(applicationContext)
 
         val testNotifications = listOf(
             Triple("입금 알림", "신한SOL", "123-***-456 입금 1,500,000원 잔액 8,200,000원"),
@@ -249,13 +212,11 @@ class MainActivity : AppCompatActivity() {
         results.append("다른 앱 무시: ${!parser.canParse("com.other.app")}\n\n")
 
         var successCount = 0
-        val parsedList = mutableListOf<com.banktotal.app.data.parser.ParsedTransaction>()
 
         for ((label, title, text) in testNotifications) {
             val parsed = parser.parse(title, text)
             if (parsed != null) {
                 successCount++
-                parsedList.add(parsed)
                 results.append("[$label] 성공\n")
                 results.append("  계좌: ${parsed.accountNumber}\n")
                 results.append("  잔액: ${decimalFormat.format(parsed.balance)}원\n")
@@ -277,23 +238,10 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("신한 알림 테스트")
             .setMessage(results.toString())
-            .setPositiveButton("DB에 저장") { _, _ ->
-                CoroutineScope(Dispatchers.IO).launch {
-                    for (parsed in parsedList) {
-                        repository.upsertFromSms(
-                            parsed.bankName, parsed.accountNumber,
-                            parsed.balance, parsed.transactionType, parsed.transactionAmount
-                        )
-                    }
-                    launch(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "신한 ${parsedList.size}건 DB 저장 완료!", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
             .setNeutralButton(if (!listenerEnabled) "권한 설정" else null) { _, _ ->
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
-            .setNegativeButton("닫기", null)
+            .setPositiveButton("확인", null)
             .show()
     }
 
@@ -410,14 +358,12 @@ class MainActivity : AppCompatActivity() {
 
         if (needSmsPermission) {
             smsPermissionLauncher.launch(smsPermissions)
-        } else {
-            viewModel.runFirstScanIfNeeded()
         }
 
         if (!isNotificationListenerEnabled()) {
             AlertDialog.Builder(this)
                 .setTitle("알림 접근 권한")
-                .setMessage("신한은행 알림을 읽으려면 알림 접근 권한이 필요합니다. 설정으로 이동하시겠습니까?")
+                .setMessage("은행 알림을 읽으려면 알림 접근 권한이 필요합니다. 설정으로 이동하시겠습니까?")
                 .setPositiveButton("설정으로 이동") { _, _ ->
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }

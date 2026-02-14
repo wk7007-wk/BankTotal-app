@@ -77,14 +77,14 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- SMS 스캔 버튼 -->
+    <!-- 설정 버튼 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnScanSms"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_popup_sync"
-        android:contentDescription="SMS 기록 스캔"
+        android:src="@android:drawable/ic_menu_manage"
+        android:contentDescription="설정"
         app:backgroundTint="#4CAF50"
         app:tint="#FFFFFF"
         app:layout_constraintBottom_toBottomOf="parent"

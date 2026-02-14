@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.totalBalance.observe(this) { total ->
             val balance = total ?: 0L
-            binding.tvTotalBalance.text = "${decimalFormat.format(balance)}원"
+            binding.tvTotalBalance.text = decimalFormat.format(balance)
         }
     }
 
@@ -347,17 +347,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        val smsPermissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS
         )
 
-        val needSmsPermission = smsPermissions.any {
+        // Android 13+ POST_NOTIFICATIONS 권한 필요
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val needPermission = permissions.any {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
-        if (needSmsPermission) {
-            smsPermissionLauncher.launch(smsPermissions)
+        if (needPermission) {
+            smsPermissionLauncher.launch(permissions.toTypedArray())
         }
 
         if (!isNotificationListenerEnabled()) {

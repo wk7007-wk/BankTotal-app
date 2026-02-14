@@ -19,6 +19,7 @@ class AccountAdapter(
 
     private val decimalFormat = DecimalFormat("#,###")
     private val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
+    private val bankAbbr = mapOf("KB국민" to "k", "하나" to "ha", "신협" to "s", "신한" to "sh")
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemAccountBinding.inflate(
@@ -36,14 +37,14 @@ class AccountAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(account: AccountEntity) {
-            binding.tvBankName.text = account.bankName
+            binding.tvBankName.text = bankAbbr[account.bankName] ?: account.bankName
             binding.tvDisplayName.text = account.displayName.ifEmpty {
                 account.accountNumber
             }
-            binding.tvBalance.text = "${decimalFormat.format(account.balance)}원"
+            binding.tvBalance.text = decimalFormat.format(account.balance)
 
             val lastTx = if (account.lastTransactionType.isNotEmpty()) {
-                "${account.lastTransactionType} ${decimalFormat.format(account.lastTransactionAmount)}원 · ${dateFormat.format(Date(account.lastUpdated))}"
+                "${account.lastTransactionType} ${decimalFormat.format(account.lastTransactionAmount)} · ${dateFormat.format(Date(account.lastUpdated))}"
             } else if (account.lastUpdated > 0) {
                 dateFormat.format(Date(account.lastUpdated))
             } else {

@@ -83,7 +83,7 @@ object BalanceNotificationHelper {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle("${decimalFormat.format(total)}원")
+                .setContentTitle(decimalFormat.format(total))
                 .setContentText(content)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -101,16 +101,22 @@ class MainActivity : AppCompatActivity() {
         viewModel.totalBalance.observe(this) { total ->
             val balance = total ?: 0L
             binding.tvTotalBalance.text = decimalFormat.format(balance)
+            updateSubtotalVisibility()
         }
 
         viewModel.subtotalBalance.observe(this) { subtotal ->
             val sub = subtotal ?: 0L
-            val total = viewModel.totalBalance.value ?: 0L
-            val hasNegative = sub != total
-            binding.tvSubtotalLabel.visibility = if (hasNegative) View.VISIBLE else View.GONE
-            binding.tvSubtotalBalance.visibility = if (hasNegative) View.VISIBLE else View.GONE
             binding.tvSubtotalBalance.text = decimalFormat.format(sub)
+            updateSubtotalVisibility()
         }
+    }
+
+    private fun updateSubtotalVisibility() {
+        val sub = viewModel.subtotalBalance.value ?: 0L
+        val total = viewModel.totalBalance.value ?: 0L
+        val hasNegative = sub != total
+        binding.tvSubtotalLabel.visibility = if (hasNegative) View.VISIBLE else View.GONE
+        binding.tvSubtotalBalance.visibility = if (hasNegative) View.VISIBLE else View.GONE
     }
 
     private fun setupButtons() {

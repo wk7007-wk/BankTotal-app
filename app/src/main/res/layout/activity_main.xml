@@ -12,7 +12,10 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:padding="24dp"
+        android:paddingStart="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp"
+        android:paddingEnd="60dp"
         android:background="#1A1A2E"
         app:layout_constraintTop_toTopOf="parent">
 

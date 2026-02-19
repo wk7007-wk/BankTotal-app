@@ -24,8 +24,8 @@ object BalanceNotificationHelper {
     private const val NOTIFICATION_ID = 1001
     private val decimalFormat = DecimalFormat("#,###")
     private val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
-    private val abbr = mapOf("KB국민" to "k", "하나" to "ha", "신협" to "s", "신한" to "sh")
-    private val bankOrder = listOf("KB국민", "하나", "신협", "신한")
+    private val abbr = mapOf("KB국민" to "k", "하나" to "ha", "신협" to "s", "신한" to "sh", "BBQ" to "BBQ")
+    private val bankOrder = listOf("KB국민", "하나", "신협", "신한", "BBQ")
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -46,6 +46,7 @@ object BalanceNotificationHelper {
         CoroutineScope(Dispatchers.IO).launch {
             val dao = BankDatabase.getInstance(context).accountDao()
             val total = dao.getTotalBalanceSync() ?: 0L
+            val subtotal = dao.getSubtotalBalanceSync() ?: 0L
             val accounts = dao.getAllAccountsSync()
             val now = dateFormat.format(Date())
 
@@ -55,12 +56,17 @@ object BalanceNotificationHelper {
                 val ab = abbr[bank] ?: bank
                 if (acc != null) {
                     parts.add("$ab ${decimalFormat.format(acc.balance)}")
-                } else {
-                    parts.add("$ab ---")
                 }
             }
             parts.add(now)
             val content = parts.joinToString(" | ")
+
+            val hasNegative = accounts.any { it.isActive && it.balance < 0 }
+            val titleText = if (hasNegative) {
+                "소계 ${decimalFormat.format(subtotal)} | 합계 ${decimalFormat.format(total)}"
+            } else {
+                decimalFormat.format(total)
+            }
 
             // 앱 열기 인텐트
             val openIntent = Intent(context, MainActivity::class.java)
@@ -83,7 +89,7 @@ object BalanceNotificationHelper {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle(decimalFormat.format(total))
+                .setContentTitle(titleText)
                 .setContentText(content)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

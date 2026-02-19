@@ -15,6 +15,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     val allAccounts: LiveData<List<AccountEntity>> = repository.getAllAccounts()
     val totalBalance: LiveData<Long?> = repository.getTotalBalance()
+    val subtotalBalance: LiveData<Long?> = repository.getSubtotalBalance()
 
     fun addManualAccount(bankName: String, accountNumber: String, displayName: String, balance: Long) {
         viewModelScope.launch { repository.addManualAccount(bankName, accountNumber, displayName, balance) }

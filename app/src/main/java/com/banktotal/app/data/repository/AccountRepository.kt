@@ -14,6 +14,7 @@ class AccountRepository(private val context: Context) {
     fun getAllAccounts(): LiveData<List<AccountEntity>> = dao.getAllAccounts()
     fun getActiveAccounts(): LiveData<List<AccountEntity>> = dao.getActiveAccounts()
     fun getTotalBalance(): LiveData<Long?> = dao.getTotalBalance()
+    fun getSubtotalBalance(): LiveData<Long?> = dao.getSubtotalBalance()
 
     private fun refreshDisplays() {
         WidgetUpdateHelper.updateWidget(context)
@@ -93,5 +94,32 @@ class AccountRepository(private val context: Context) {
 
     suspend fun getTotalBalanceSync(): Long = dao.getTotalBalanceSync() ?: 0L
 
+    suspend fun getSubtotalBalanceSync(): Long = dao.getSubtotalBalanceSync() ?: 0L
+
     suspend fun getLastUpdateTime(): Long = dao.getLastUpdateTime() ?: 0L
+
+    suspend fun upsertBlockAmount(bankName: String, amount: Long) {
+        val accountNumber = "BLOCK"
+        val existing = dao.findAccount(bankName, accountNumber)
+        val negativeAmount = -kotlin.math.abs(amount)
+        if (existing != null) {
+            dao.update(
+                existing.copy(
+                    balance = negativeAmount,
+                    lastUpdated = System.currentTimeMillis()
+                )
+            )
+        } else {
+            dao.insert(
+                AccountEntity(
+                    bankName = bankName,
+                    accountNumber = accountNumber,
+                    displayName = "$bankName BLOCK",
+                    balance = negativeAmount,
+                    lastUpdated = System.currentTimeMillis()
+                )
+            )
+        }
+        refreshDisplays()
+    }
 }

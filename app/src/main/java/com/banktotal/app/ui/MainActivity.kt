@@ -102,6 +102,15 @@ class MainActivity : AppCompatActivity() {
             val balance = total ?: 0L
             binding.tvTotalBalance.text = decimalFormat.format(balance)
         }
+
+        viewModel.subtotalBalance.observe(this) { subtotal ->
+            val sub = subtotal ?: 0L
+            val total = viewModel.totalBalance.value ?: 0L
+            val hasNegative = sub != total
+            binding.tvSubtotalLabel.visibility = if (hasNegative) View.VISIBLE else View.GONE
+            binding.tvSubtotalBalance.visibility = if (hasNegative) View.VISIBLE else View.GONE
+            binding.tvSubtotalBalance.text = decimalFormat.format(sub)
+        }
     }
 
     private fun setupButtons() {
@@ -111,13 +120,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettingsMenu() {
-        val options = arrayOf("데이터 전체 초기화", "알림 접근 권한 설정")
+        val options = arrayOf("데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
         AlertDialog.Builder(this)
             .setTitle("설정")
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> confirmDeleteAll()
                     1 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    2 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             }
             .show()

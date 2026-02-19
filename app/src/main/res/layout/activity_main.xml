@@ -17,21 +17,40 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
+            android:id="@+id/tvSubtotalLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="총 잔액"
+            android:text="소계"
             android:textColor="#888888"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvSubtotalBalance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0"
+            android:textColor="#AAAAAA"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="합계"
+            android:textColor="#888888"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp" />
 
         <TextView
             android:id="@+id/tvTotalBalance"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0원"
+            android:text="0"
             android:textColor="#FFFFFF"
             android:textSize="32sp"
             android:textStyle="bold"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="4dp" />
 
         <TextView
             android:id="@+id/tvLastUpdated"

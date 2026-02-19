@@ -30,13 +30,18 @@ object WidgetUpdateHelper {
         CoroutineScope(Dispatchers.IO).launch {
             val repository = AccountRepository(context.applicationContext)
             val totalBalance = repository.getTotalBalanceSync()
+            val subtotalBalance = repository.getSubtotalBalanceSync()
             val lastUpdate = repository.getLastUpdateTime()
 
-            val views = RemoteViews(context.packageName, R.layout.widget_balance)
-            views.setTextViewText(
-                R.id.widget_total_balance,
+            val hasNegative = totalBalance != subtotalBalance
+            val balanceText = if (hasNegative) {
+                "소계 ${decimalFormat.format(subtotalBalance)}원\n합계 ${decimalFormat.format(totalBalance)}원"
+            } else {
                 "${decimalFormat.format(totalBalance)}원"
-            )
+            }
+
+            val views = RemoteViews(context.packageName, R.layout.widget_balance)
+            views.setTextViewText(R.id.widget_total_balance, balanceText)
 
             val updateText = if (lastUpdate > 0) {
                 "업데이트: ${dateFormat.format(Date(lastUpdate))}"

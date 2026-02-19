@@ -17,6 +17,12 @@ interface AccountDao {
     @Query("SELECT SUM(balance) FROM accounts WHERE is_active = 1")
     suspend fun getTotalBalanceSync(): Long?
 
+    @Query("SELECT SUM(balance) FROM accounts WHERE is_active = 1 AND balance >= 0")
+    fun getSubtotalBalance(): LiveData<Long?>
+
+    @Query("SELECT SUM(balance) FROM accounts WHERE is_active = 1 AND balance >= 0")
+    suspend fun getSubtotalBalanceSync(): Long?
+
     @Query("SELECT * FROM accounts WHERE bank_name = :bankName AND account_number = :accountNumber LIMIT 1")
     suspend fun findAccount(bankName: String, accountNumber: String): AccountEntity?
 

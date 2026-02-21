@@ -126,17 +126,79 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettingsMenu() {
-        val options = arrayOf("데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
+        val options = arrayOf("출금 내역", "일별 입금", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
         AlertDialog.Builder(this)
             .setTitle("설정")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> confirmDeleteAll()
-                    1 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    2 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    0 -> showWithdrawalHistory()
+                    1 -> showDailyDeposits()
+                    2 -> confirmDeleteAll()
+                    3 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    4 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             }
             .show()
+    }
+
+    private fun showWithdrawalHistory() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val repository = AccountRepository(applicationContext)
+            val withdrawals = repository.getWithdrawals()
+            launch(Dispatchers.Main) {
+                if (withdrawals.isEmpty()) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("출금 내역")
+                        .setMessage("출금 내역이 없습니다.")
+                        .setPositiveButton("확인", null)
+                        .show()
+                    return@launch
+                }
+                val sb = StringBuilder()
+                var currentDate = ""
+                for (tx in withdrawals) {
+                    val date = SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(tx.timestamp))
+                    val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.timestamp))
+                    if (date != currentDate) {
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append("-- $date --\n")
+                        currentDate = date
+                    }
+                    sb.append("$time  ${tx.bankName}  ${decimalFormat.format(tx.amount)}\n")
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("출금 내역 (${withdrawals.size}건)")
+                    .setMessage(sb.toString())
+                    .setPositiveButton("확인", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showDailyDeposits() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val repository = AccountRepository(applicationContext)
+            val deposits = repository.getDailyDeposits()
+            launch(Dispatchers.Main) {
+                if (deposits.isEmpty()) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("일별 입금")
+                        .setMessage("입금 내역이 없습니다.")
+                        .setPositiveButton("확인", null)
+                        .show()
+                    return@launch
+                }
+                val sb = StringBuilder()
+                for (d in deposits) {
+                    sb.append("${d.day}  ${decimalFormat.format(d.total)}\n")
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("일별 입금 (${deposits.size}일)")
+                    .setMessage(sb.toString())
+                    .setPositiveButton("확인", null)
+                    .show()
+            }
+        }
     }
 
     private fun confirmDeleteAll() {

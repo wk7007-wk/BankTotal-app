@@ -77,12 +77,18 @@ class BankNotificationListenerService : NotificationListenerService() {
         val amountStr = amountMatch?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() } ?: "0"
         val amount = amountStr.replace(",", "").toLongOrNull() ?: 0L
 
-        // 은행 식별
+        // 은행 식별 (누락 방지: 미식별 은행도 "기타"로 기록)
         val bankName = when {
             content.contains("[KB]") || content.contains("국민") -> "KB국민"
             content.contains("하나") -> "하나"
             content.contains("입출금안내") || content.contains("신협") -> "신협"
-            else -> return null
+            content.contains("신한") -> "신한"
+            content.contains("우리") -> "우리"
+            content.contains("농협") || content.contains("NH") -> "농협"
+            content.contains("기업") || content.contains("IBK") -> "기업"
+            content.contains("카카오") -> "카카오"
+            content.contains("토스") -> "토스"
+            else -> "기타"
         }
 
         return ParsedTransaction(

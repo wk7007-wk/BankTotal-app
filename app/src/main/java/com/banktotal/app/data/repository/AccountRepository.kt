@@ -5,11 +5,15 @@ import androidx.lifecycle.LiveData
 import com.banktotal.app.data.db.AccountDao
 import com.banktotal.app.data.db.AccountEntity
 import com.banktotal.app.data.db.BankDatabase
+import com.banktotal.app.data.db.DailyDeposit
+import com.banktotal.app.data.db.TransactionDao
+import com.banktotal.app.data.db.TransactionEntity
 import com.banktotal.app.service.BalanceNotificationHelper
 import com.banktotal.app.widget.WidgetUpdateHelper
 
 class AccountRepository(private val context: Context) {
     private val dao: AccountDao = BankDatabase.getInstance(context).accountDao()
+    private val txDao: TransactionDao = BankDatabase.getInstance(context).transactionDao()
 
     fun getAllAccounts(): LiveData<List<AccountEntity>> = dao.getAllAccounts()
     fun getActiveAccounts(): LiveData<List<AccountEntity>> = dao.getActiveAccounts()
@@ -47,6 +51,16 @@ class AccountRepository(private val context: Context) {
                     lastTransactionType = transactionType,
                     lastTransactionAmount = transactionAmount,
                     lastUpdated = System.currentTimeMillis()
+                )
+            )
+        }
+        // 거래 내역 기록 (누락 방지: 타입만 있으면 무조건 기록)
+        if (transactionType.isNotEmpty()) {
+            txDao.insert(
+                TransactionEntity(
+                    bankName = bankName,
+                    transactionType = transactionType,
+                    amount = transactionAmount
                 )
             )
         }
@@ -89,6 +103,7 @@ class AccountRepository(private val context: Context) {
 
     suspend fun deleteAll() {
         dao.deleteAll()
+        txDao.deleteAll()
         refreshDisplays()
     }
 
@@ -122,4 +137,10 @@ class AccountRepository(private val context: Context) {
         }
         refreshDisplays()
     }
+
+    /** 출금 내역 (최근 200건) */
+    suspend fun getWithdrawals(): List<TransactionEntity> = txDao.getWithdrawals()
+
+    /** 일별 입금 합계 */
+    suspend fun getDailyDeposits(): List<DailyDeposit> = txDao.getDailyDeposits()
 }

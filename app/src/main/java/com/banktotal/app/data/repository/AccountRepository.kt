@@ -8,7 +8,9 @@ import com.banktotal.app.data.db.BankDatabase
 import com.banktotal.app.data.db.DailyDeposit
 import com.banktotal.app.data.db.TransactionDao
 import com.banktotal.app.data.db.TransactionEntity
+import com.banktotal.app.data.parser.ParsedTransaction
 import com.banktotal.app.service.BalanceNotificationHelper
+import com.banktotal.app.service.FirebaseTransactionWriter
 import com.banktotal.app.widget.WidgetUpdateHelper
 
 class AccountRepository(private val context: Context) {
@@ -25,45 +27,35 @@ class AccountRepository(private val context: Context) {
         BalanceNotificationHelper.update(context)
     }
 
-    suspend fun upsertFromSms(
-        bankName: String,
-        accountNumber: String,
-        balance: Long,
-        transactionType: String,
-        transactionAmount: Long
-    ) {
-        val existing = dao.findAccount(bankName, accountNumber)
+    suspend fun upsertFromSms(parsed: ParsedTransaction) {
+        val existing = dao.findAccount(parsed.bankName, parsed.accountNumber)
         if (existing != null) {
             dao.update(
                 existing.copy(
-                    balance = balance,
-                    lastTransactionType = transactionType,
-                    lastTransactionAmount = transactionAmount,
+                    balance = parsed.balance,
+                    lastTransactionType = parsed.transactionType,
+                    lastTransactionAmount = parsed.transactionAmount,
                     lastUpdated = System.currentTimeMillis()
                 )
             )
         } else {
             dao.insert(
                 AccountEntity(
-                    bankName = bankName,
-                    accountNumber = accountNumber,
-                    balance = balance,
-                    lastTransactionType = transactionType,
-                    lastTransactionAmount = transactionAmount,
+                    bankName = parsed.bankName,
+                    accountNumber = parsed.accountNumber,
+                    balance = parsed.balance,
+                    lastTransactionType = parsed.transactionType,
+                    lastTransactionAmount = parsed.transactionAmount,
                     lastUpdated = System.currentTimeMillis()
                 )
             )
         }
-        // 출금 내역만 기록 (입금은 통장간 이동이라 제외)
-        if (transactionType == "출금") {
-            txDao.insert(
-                TransactionEntity(
-                    bankName = bankName,
-                    transactionType = transactionType,
-                    amount = transactionAmount
-                )
-            )
+        // Firebase에 모든 거래 저장 ("이원규" = 통장간 이동 제외)
+        if (!parsed.counterparty.contains("이원규")) {
+            FirebaseTransactionWriter.save(parsed)
         }
+        // Firebase에 계좌 잔고 동기화
+        FirebaseTransactionWriter.saveAccountBalance(parsed)
         refreshDisplays()
     }
 

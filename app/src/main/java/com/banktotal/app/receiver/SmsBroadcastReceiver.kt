@@ -30,13 +30,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                repository.upsertFromSms(
-                    bankName = parsed.bankName,
-                    accountNumber = parsed.accountNumber,
-                    balance = parsed.balance,
-                    transactionType = parsed.transactionType,
-                    transactionAmount = parsed.transactionAmount
-                )
+                repository.upsertFromSms(parsed)
             } finally {
                 pendingResult.finish()
             }

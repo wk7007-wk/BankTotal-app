@@ -25,6 +25,9 @@ import com.banktotal.app.service.BalanceNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -126,12 +129,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettingsMenu() {
-        val options = arrayOf("출금 내역", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
+        val options = arrayOf("가계부", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
         AlertDialog.Builder(this)
             .setTitle("설정")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> showWithdrawalHistory()
+                    0 -> loadLedgerFromFirebase()
                     1 -> confirmDeleteAll()
                     2 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     3 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -140,38 +143,147 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showWithdrawalHistory() {
+    private data class FirebaseTx(
+        val bank: String, val type: String, val amount: Long,
+        val balance: Long, val counterparty: String, val raw: String, val ts: Long
+    )
+
+    private fun loadLedgerFromFirebase() {
+        Toast.makeText(this, "가계부 로드 중...", Toast.LENGTH_SHORT).show()
         CoroutineScope(Dispatchers.IO).launch {
-            val repository = AccountRepository(applicationContext)
-            val withdrawals = repository.getWithdrawals()
-            launch(Dispatchers.Main) {
-                if (withdrawals.isEmpty()) {
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("출금 내역")
-                        .setMessage("출금 내역이 없습니다.")
-                        .setPositiveButton("확인", null)
-                        .show()
+            try {
+                val conn = URL(
+                    "https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app/banktotal/transactions.json"
+                ).openConnection() as HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                val json = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+
+                if (json == "null" || json.isEmpty()) {
+                    launch(Dispatchers.Main) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage("거래 내역이 없습니다.")
+                            .setPositiveButton("확인", null)
+                            .show()
+                    }
                     return@launch
                 }
-                val sb = StringBuilder()
-                var currentDate = ""
-                for (tx in withdrawals) {
-                    val date = SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(tx.timestamp))
-                    val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.timestamp))
-                    if (date != currentDate) {
-                        if (sb.isNotEmpty()) sb.append("\n")
-                        sb.append("-- $date --\n")
-                        currentDate = date
-                    }
-                    sb.append("$time  ${tx.bankName}  ${decimalFormat.format(tx.amount)}\n")
+
+                val obj = JSONObject(json)
+                val txList = mutableListOf<FirebaseTx>()
+                obj.keys().forEach { key ->
+                    val item = obj.getJSONObject(key)
+                    txList.add(FirebaseTx(
+                        bank = item.optString("bank"),
+                        type = item.optString("type"),
+                        amount = item.optLong("amount"),
+                        balance = item.optLong("balance"),
+                        counterparty = item.optString("counterparty"),
+                        raw = item.optString("raw"),
+                        ts = item.optLong("ts")
+                    ))
                 }
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("출금 내역 (${withdrawals.size}건)")
-                    .setMessage(sb.toString())
-                    .setPositiveButton("확인", null)
-                    .show()
+                txList.sortByDescending { it.ts }
+
+                launch(Dispatchers.Main) { showLedgerMenu(txList) }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "가계부 로드 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
+    }
+
+    private fun showLedgerMenu(txList: List<FirebaseTx>) {
+        val options = arrayOf("전체 내역", "입금 내역", "출금 내역", "카테고리별 합계")
+        AlertDialog.Builder(this)
+            .setTitle("가계부 (${txList.size}건)")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showTxList("전체 내역", txList)
+                    1 -> showDepositSummary(txList.filter { it.type == "입금" })
+                    2 -> showTxList("출금 내역", txList.filter { it.type == "출금" })
+                    3 -> showCategorySummary(txList.filter { it.type == "출금" })
+                }
+            }
+            .show()
+    }
+
+    private fun showTxList(title: String, txList: List<FirebaseTx>) {
+        if (txList.isEmpty()) {
+            AlertDialog.Builder(this).setMessage("내역이 없습니다.").setPositiveButton("확인", null).show()
+            return
+        }
+        val sb = StringBuilder()
+        var currentDate = ""
+        for (tx in txList.take(200)) {
+            val date = SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(tx.ts))
+            val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.ts))
+            if (date != currentDate) {
+                if (sb.isNotEmpty()) sb.append("\n")
+                sb.append("-- $date --\n")
+                currentDate = date
+            }
+            val typeIcon = if (tx.type == "입금") "+" else "-"
+            val cp = if (tx.counterparty.isNotEmpty()) " ${tx.counterparty}" else ""
+            sb.append("$time ${tx.bank} $typeIcon${decimalFormat.format(tx.amount)}$cp\n")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("$title (${txList.size}건)")
+            .setMessage(sb.toString())
+            .setPositiveButton("확인", null)
+            .show()
+    }
+
+    private fun showDepositSummary(deposits: List<FirebaseTx>) {
+        if (deposits.isEmpty()) {
+            AlertDialog.Builder(this).setMessage("입금 내역이 없습니다.").setPositiveButton("확인", null).show()
+            return
+        }
+        val sb = StringBuilder()
+        val grouped = deposits.groupBy {
+            SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(it.ts))
+        }
+        for ((date, txs) in grouped) {
+            val dayTotal = txs.sumOf { it.amount }
+            sb.append("-- $date  합계: ${decimalFormat.format(dayTotal)} --\n")
+            for (tx in txs) {
+                val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.ts))
+                val cp = if (tx.counterparty.isNotEmpty()) " ${tx.counterparty}" else ""
+                sb.append("  $time ${tx.bank} +${decimalFormat.format(tx.amount)}$cp\n")
+            }
+            sb.append("\n")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("입금 내역 (${deposits.size}건)")
+            .setMessage(sb.toString())
+            .setPositiveButton("확인", null)
+            .show()
+    }
+
+    private fun showCategorySummary(withdrawals: List<FirebaseTx>) {
+        if (withdrawals.isEmpty()) {
+            AlertDialog.Builder(this).setMessage("출금 내역이 없습니다.").setPositiveButton("확인", null).show()
+            return
+        }
+        val sb = StringBuilder()
+        val grouped = withdrawals
+            .groupBy { it.counterparty.ifEmpty { "미분류" } }
+            .map { (name, txs) -> name to txs.sumOf { it.amount } }
+            .sortedByDescending { it.second }
+
+        val total = withdrawals.sumOf { it.amount }
+        sb.append("총 출금: ${decimalFormat.format(total)}\n\n")
+        for ((name, sum) in grouped) {
+            val count = withdrawals.count { (it.counterparty.ifEmpty { "미분류" }) == name }
+            sb.append("$name  ${decimalFormat.format(sum)} (${count}건)\n")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("카테고리별 출금")
+            .setMessage(sb.toString())
+            .setPositiveButton("확인", null)
+            .show()
     }
 
 
@@ -311,7 +423,7 @@ class MainActivity : AppCompatActivity() {
             var count = 0
             for ((sender, body) in smsTests) {
                 val parsed = parserManager.parse(sender, body) ?: continue
-                repository.upsertFromSms(parsed.bankName, parsed.accountNumber, parsed.balance, parsed.transactionType, parsed.transactionAmount)
+                repository.upsertFromSms(parsed)
                 count++
             }
 
@@ -321,7 +433,7 @@ class MainActivity : AppCompatActivity() {
             )
             for ((title, text) in shinhanTests) {
                 val parsed = shinhanParser.parse(title, text) ?: continue
-                repository.upsertFromSms(parsed.bankName, parsed.accountNumber, parsed.balance, parsed.transactionType, parsed.transactionAmount)
+                repository.upsertFromSms(parsed)
                 count++
             }
 

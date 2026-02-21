@@ -77,10 +77,7 @@ class SmsHistoryReader(private val context: Context) {
 
                 val parsed = parserManager.parse(rawAddress, body) ?: continue
                 try {
-                    repository.upsertFromSms(
-                        parsed.bankName, parsed.accountNumber,
-                        parsed.balance, parsed.transactionType, parsed.transactionAmount
-                    )
+                    repository.upsertFromSms(parsed)
                     updated++
                 } catch (e: Exception) {
                     Log.e(TAG, "DB upsert failed: ${parsed.bankName}", e)

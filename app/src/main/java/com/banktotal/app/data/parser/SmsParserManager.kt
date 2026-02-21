@@ -52,7 +52,9 @@ class SmsParserManager {
             accountNumber = accountNumber,
             balance = balance,
             transactionType = transactionType,
-            transactionAmount = amount
+            transactionAmount = amount,
+            counterparty = extractCounterparty(body, transactionType),
+            rawSms = body
         )
     }
 }

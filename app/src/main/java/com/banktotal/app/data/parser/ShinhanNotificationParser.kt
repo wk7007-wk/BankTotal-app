@@ -36,7 +36,9 @@ class ShinhanNotificationParser {
             accountNumber = accountNumber,
             balance = balance,
             transactionType = transactionType,
-            transactionAmount = amount
+            transactionAmount = amount,
+            counterparty = extractCounterparty(content, transactionType),
+            rawSms = content
         )
     }
 }

@@ -4,6 +4,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.banktotal.app.data.parser.ParsedTransaction
 import com.banktotal.app.data.parser.ShinhanNotificationParser
+import com.banktotal.app.data.parser.extractCounterparty
 import com.banktotal.app.data.repository.AccountRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,13 +45,7 @@ class BankNotificationListenerService : NotificationListenerService() {
 
         val repository = AccountRepository(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
-            repository.upsertFromSms(
-                bankName = parsed.bankName,
-                accountNumber = parsed.accountNumber,
-                balance = parsed.balance,
-                transactionType = parsed.transactionType,
-                transactionAmount = parsed.transactionAmount
-            )
+            repository.upsertFromSms(parsed)
         }
     }
 
@@ -96,7 +91,9 @@ class BankNotificationListenerService : NotificationListenerService() {
             accountNumber = accountNumber.ifEmpty { "${bankName}계좌" },
             balance = balance,
             transactionType = transactionType,
-            transactionAmount = amount
+            transactionAmount = amount,
+            counterparty = extractCounterparty(content, transactionType),
+            rawSms = content
         )
     }
 }

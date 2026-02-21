@@ -4,6 +4,11 @@ plugins {
     id 'kotlin-kapt'
 }
 
+// 한국시간 기준 빌드시간 자동 버전
+def buildTime = new Date().toInstant().atZone(java.time.ZoneId.of("Asia/Seoul"))
+def autoVersionName = buildTime.format(java.time.format.DateTimeFormatter.ofPattern("MMdd.HHmm"))
+def autoVersionCode = (int)(System.currentTimeMillis() / 60000)
+
 android {
     namespace 'com.banktotal.app'
     compileSdk 33
@@ -12,8 +17,8 @@ android {
         applicationId "com.banktotal.app"
         minSdk 26
         targetSdk 33
-        versionCode 3
-        versionName "1.2"
+        versionCode autoVersionCode
+        versionName autoVersionName
     }
 
     signingConfigs {

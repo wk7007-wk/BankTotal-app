@@ -57,6 +57,7 @@ class SmsHistoryReader(private val context: Context) {
         cursor?.use { c ->
             val addressIdx = c.getColumnIndexOrThrow("address")
             val bodyIdx = c.getColumnIndexOrThrow("body")
+            val dateIdx = c.getColumnIndexOrThrow("date")
 
             val totalCount = c.count
             val startPos = if (totalCount > maxMessages) totalCount - maxMessages else 0
@@ -66,6 +67,7 @@ class SmsHistoryReader(private val context: Context) {
                 totalRead++
                 val rawAddress = c.getString(addressIdx) ?: continue
                 val body = c.getString(bodyIdx) ?: continue
+                val smsDate = c.getLong(dateIdx)
 
                 val normalized = rawAddress.replace("-", "").replace(" ", "")
                     .replace("+82", "0").trimStart('0')
@@ -76,8 +78,9 @@ class SmsHistoryReader(private val context: Context) {
                 bankFound++
 
                 val parsed = parserManager.parse(rawAddress, body) ?: continue
+                val withDate = parsed.copy(timestamp = smsDate)
                 try {
-                    repository.upsertFromSms(parsed)
+                    repository.upsertFromSms(withDate)
                     updated++
                 } catch (e: Exception) {
                     Log.e(TAG, "DB upsert failed: ${parsed.bankName}", e)

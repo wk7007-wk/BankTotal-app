@@ -7,7 +7,8 @@ data class ParsedTransaction(
     val transactionType: String,
     val transactionAmount: Long,
     val counterparty: String = "",
-    val rawSms: String = ""
+    val rawSms: String = "",
+    val timestamp: Long = 0  // SMS 원본 시간 (0이면 현재시간 사용)
 )
 
 interface BankSmsParser {

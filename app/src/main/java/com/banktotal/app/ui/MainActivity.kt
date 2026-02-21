@@ -18,6 +18,7 @@ import android.widget.Toast
 import com.banktotal.app.data.db.AccountEntity
 import com.banktotal.app.data.parser.SmsParserManager
 import com.banktotal.app.data.parser.ShinhanNotificationParser
+import com.banktotal.app.data.sms.SmsHistoryReader
 import com.banktotal.app.data.repository.AccountRepository
 import com.banktotal.app.databinding.ActivityMainBinding
 import com.banktotal.app.databinding.DialogAccountBinding
@@ -129,15 +130,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettingsMenu() {
-        val options = arrayOf("가계부", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
+        val options = arrayOf("가계부", "SMS→Firebase 업로드", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
         AlertDialog.Builder(this)
             .setTitle("설정")
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> loadLedgerFromFirebase()
-                    1 -> confirmDeleteAll()
-                    2 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    3 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    1 -> scanSmsToFirebase()
+                    2 -> confirmDeleteAll()
+                    3 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    4 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             }
             .show()
@@ -286,6 +288,27 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+
+    private fun scanSmsToFirebase() {
+        if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
+            checkSelfPermission(android.Manifest.permission.READ_SMS)) {
+            requestPermissions(arrayOf(android.Manifest.permission.READ_SMS), 200)
+            Toast.makeText(this, "SMS 읽기 권한이 필요합니다", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "SMS 스캔 중...", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val reader = SmsHistoryReader(applicationContext)
+            val result = reader.scanInbox(5000)
+            launch(Dispatchers.Main) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "SMS ${result.totalSmsRead}건 중 은행 ${result.bankSmsFound}건 → Firebase ${result.accountsUpdated}건 업로드",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
 
     private fun confirmDeleteAll() {
         AlertDialog.Builder(this)

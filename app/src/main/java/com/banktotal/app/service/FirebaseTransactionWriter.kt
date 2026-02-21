@@ -24,7 +24,7 @@ object FirebaseTransactionWriter {
                 obj.put("balance", parsed.balance)
                 obj.put("counterparty", parsed.counterparty)
                 obj.put("raw", parsed.rawSms)
-                obj.put("ts", System.currentTimeMillis())
+                obj.put("ts", if (parsed.timestamp > 0) parsed.timestamp else System.currentTimeMillis())
 
                 val conn = URL("$FIREBASE_BASE/banktotal/transactions.json")
                     .openConnection() as HttpURLConnection

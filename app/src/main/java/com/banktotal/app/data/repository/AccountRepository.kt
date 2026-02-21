@@ -54,8 +54,8 @@ class AccountRepository(private val context: Context) {
                 )
             )
         }
-        // 거래 내역 기록 (누락 방지: 타입만 있으면 무조건 기록)
-        if (transactionType.isNotEmpty()) {
+        // 출금 내역만 기록 (입금은 통장간 이동이라 제외)
+        if (transactionType == "출금") {
             txDao.insert(
                 TransactionEntity(
                     bankName = bankName,

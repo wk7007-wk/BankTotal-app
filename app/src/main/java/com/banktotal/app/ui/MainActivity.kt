@@ -534,12 +534,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        // Android 13+ POST_NOTIFICATIONS 권한 필요
+        val needed = mutableListOf<String>()
+        // Android 13+ POST_NOTIFICATIONS 권한
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
-                smsPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                needed.add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+        // SMS 수신 권한
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECEIVE_SMS)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_SMS)
+        }
+        if (needed.isNotEmpty()) {
+            smsPermissionLauncher.launch(needed.toTypedArray())
         }
 
         if (!isNotificationListenerEnabled()) {

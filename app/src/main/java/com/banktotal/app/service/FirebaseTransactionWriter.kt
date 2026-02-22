@@ -2,6 +2,10 @@ package com.banktotal.app.service
 
 import android.util.Log
 import com.banktotal.app.data.parser.ParsedTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -13,8 +17,10 @@ object FirebaseTransactionWriter {
     private const val FIREBASE_BASE =
         "https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app"
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun save(parsed: ParsedTransaction) {
-        kotlin.concurrent.thread {
+        scope.launch {
             try {
                 val obj = JSONObject()
                 obj.put("bank", parsed.bankName)
@@ -36,7 +42,11 @@ object FirebaseTransactionWriter {
                 OutputStreamWriter(conn.outputStream).use { it.write(obj.toString()) }
                 val code = conn.responseCode
                 conn.disconnect()
-                Log.d(TAG, "거래 저장: ${parsed.transactionType} ${parsed.transactionAmount} → HTTP $code")
+                if (code in 200..299) {
+                    Log.d(TAG, "거래 저장: ${parsed.transactionType} ${parsed.transactionAmount} → HTTP $code")
+                } else {
+                    Log.w(TAG, "거래 저장 실패: HTTP $code")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "거래 저장 실패: ${e.message}")
             }
@@ -44,7 +54,7 @@ object FirebaseTransactionWriter {
     }
 
     fun saveAccountBalance(parsed: ParsedTransaction) {
-        kotlin.concurrent.thread {
+        scope.launch {
             try {
                 val key = "${parsed.bankName}_${parsed.accountNumber}"
                     .replace(Regex("[.#$/\\[\\]]"), "_")
@@ -62,8 +72,11 @@ object FirebaseTransactionWriter {
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
                 OutputStreamWriter(conn.outputStream).use { it.write(obj.toString()) }
-                conn.responseCode
+                val code = conn.responseCode
                 conn.disconnect()
+                if (code !in 200..299) {
+                    Log.w(TAG, "계좌 잔고 동기화 실패: HTTP $code")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "계좌 잔고 동기화 실패: ${e.message}")
             }

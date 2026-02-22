@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.banktotal.app.data.repository.AccountRepository
+import com.banktotal.app.service.LogWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,6 +56,7 @@ class BlockAmountAccessibilityService : AccessibilityService() {
             val amount = findBlockAmountInTree(root)
             if (amount != null && amount > 0) {
                 log("BBQ BLOCK 금액: ${amount}원 → DB 저장")
+                LogWriter.tx("BBQ BLOCK 감지: ${amount}원")
                 CoroutineScope(Dispatchers.IO).launch {
                     val repo = AccountRepository(applicationContext)
                     repo.upsertBlockAmount("BBQ", amount)
@@ -62,6 +64,7 @@ class BlockAmountAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             log("처리 실패: ${e.message}")
+            LogWriter.err("BBQ 접근성 처리 실패: ${e.message}")
         } finally {
             root.recycle()
         }

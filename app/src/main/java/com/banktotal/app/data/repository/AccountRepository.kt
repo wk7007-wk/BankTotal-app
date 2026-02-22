@@ -11,6 +11,7 @@ import com.banktotal.app.data.db.TransactionEntity
 import com.banktotal.app.data.parser.ParsedTransaction
 import com.banktotal.app.service.BalanceNotificationHelper
 import com.banktotal.app.service.FirebaseTransactionWriter
+import com.banktotal.app.service.LogWriter
 import com.banktotal.app.widget.WidgetUpdateHelper
 
 class AccountRepository(private val context: Context) {
@@ -50,6 +51,7 @@ class AccountRepository(private val context: Context) {
                 )
             )
         }
+        LogWriter.tx("DB 저장: ${parsed.bankName} ${parsed.accountNumber} 잔액${parsed.balance}원")
         // Firebase에 모든 거래 저장 ("이원규" = 통장간 이동 제외)
         if (!parsed.counterparty.contains("이원규")) {
             FirebaseTransactionWriter.save(parsed)

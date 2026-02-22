@@ -5,547 +5,197 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
-import android.view.LayoutInflater
-import android.view.View
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModelProvider
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.banktotal.app.R
-import android.widget.Toast
-import com.banktotal.app.data.db.AccountEntity
-import com.banktotal.app.data.parser.SmsParserManager
-import com.banktotal.app.data.parser.ShinhanNotificationParser
-import com.banktotal.app.data.sms.SmsHistoryReader
-import com.banktotal.app.data.repository.AccountRepository
-import com.banktotal.app.databinding.ActivityMainBinding
-import com.banktotal.app.databinding.DialogAccountBinding
+import com.banktotal.app.data.db.BankDatabase
 import com.banktotal.app.service.BalanceNotificationHelper
+import com.banktotal.app.service.LogWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var viewModel: AccountViewModel
-    private lateinit var adapter: AccountAdapter
+    private lateinit var webView: WebView
 
-    private val decimalFormat = DecimalFormat("#,###")
-    private val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
+    private val DASHBOARD_URL = "https://wk7007-wk.github.io/BankTotal-app/"
 
-    private val smsPermissionLauncher = registerForActivityResult(
+    private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (!allGranted) {
-            AlertDialog.Builder(this)
-                .setTitle("권한 필요")
-                .setMessage("SMS 수신 권한이 없으면 은행 문자를 자동으로 읽을 수 없습니다.")
-                .setPositiveButton("확인", null)
-                .show()
-        }
-    }
+    ) { _ -> }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(com.banktotal.app.R.layout.activity_main)
 
-        viewModel = ViewModelProvider(this)[AccountViewModel::class.java]
-
-        setupRecyclerView()
-        observeData()
-        setupButtons()
+        webView = findViewById(com.banktotal.app.R.id.webView)
+        setupWebView()
         requestPermissions()
-
-        // 알림 업데이트
         BalanceNotificationHelper.update(this)
+        LogWriter.sys("앱 시작")
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        // 알림 "업데이트" 버튼에서 왔을 때 알림 갱신
         if (intent?.getBooleanExtra("action_refresh", false) == true) {
             BalanceNotificationHelper.update(this)
             intent.removeExtra("action_refresh")
+            webView.evaluateJavascript("if(window.refreshFromNative)refreshFromNative()", null)
         }
     }
 
-    private fun setupRecyclerView() {
-        adapter = AccountAdapter(
-            onItemClick = { account -> showEditDialog(account) },
-            onItemLongClick = { account -> showAccountOptions(account) }
-        )
-        binding.rvAccounts.layoutManager = LinearLayoutManager(this)
-        binding.rvAccounts.adapter = adapter
+    private fun setupWebView() {
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.settings.databaseEnabled = true
+        webView.clearCache(true)
+        webView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+        webView.addJavascriptInterface(NativeBridge(), "NativeBridge")
+        webView.webViewClient = DashboardWebViewClient()
+        webView.webChromeClient = WebChromeClient()
+        webView.setBackgroundColor(0xFF121212.toInt())
+        webView.loadUrl(DASHBOARD_URL)
     }
 
-    private fun observeData() {
-        viewModel.allAccounts.observe(this) { accounts ->
-            adapter.submitList(accounts)
+    // --- WebViewClient: 캐시 저장/오프라인 폴백 ---
+    private inner class DashboardWebViewClient : WebViewClient() {
+        private var loadStartTime = 0L
+        private var hasError = false
 
-            val lastUpdate = accounts.maxOfOrNull { it.lastUpdated } ?: 0L
-            binding.tvLastUpdated.text = if (lastUpdate > 0) {
-                "마지막 업데이트: ${dateFormat.format(Date(lastUpdate))}"
-            } else {
-                "마지막 업데이트: --"
+        override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+            loadStartTime = System.currentTimeMillis()
+            hasError = false
+        }
+
+        override fun onPageFinished(view: WebView?, url: String?) {
+            val duration = System.currentTimeMillis() - loadStartTime
+            if (!hasError && url?.startsWith("http") == true) {
+                LogWriter.sys("[WebView] 로딩 완료: ${duration}ms")
+                saveCachePage(view)
             }
         }
 
-        viewModel.totalBalance.observe(this) { total ->
-            val balance = total ?: 0L
-            binding.tvTotalBalance.text = decimalFormat.format(balance)
-            updateSubtotalVisibility()
-        }
-
-        viewModel.subtotalBalance.observe(this) { subtotal ->
-            val sub = subtotal ?: 0L
-            binding.tvSubtotalBalance.text = decimalFormat.format(sub)
-            updateSubtotalVisibility()
-        }
-    }
-
-    private fun updateSubtotalVisibility() {
-        val sub = viewModel.subtotalBalance.value ?: 0L
-        val total = viewModel.totalBalance.value ?: 0L
-        val hasNegative = sub != total
-        binding.tvSubtotalLabel.visibility = if (hasNegative) View.VISIBLE else View.GONE
-        binding.tvSubtotalBalance.visibility = if (hasNegative) View.VISIBLE else View.GONE
-    }
-
-    private fun setupButtons() {
-        binding.btnAdd.setOnClickListener { showAddDialog() }
-        binding.btnTest.setOnClickListener { showTestMenu() }
-        binding.btnScanSms.setOnClickListener { showSettingsMenu() }
-    }
-
-    private fun showSettingsMenu() {
-        val options = arrayOf("가계부", "SMS→Firebase 업로드", "데이터 전체 초기화", "알림 접근 권한 설정", "접근성 권한 설정 (BBQ)")
-        AlertDialog.Builder(this)
-            .setTitle("설정")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> loadLedgerFromFirebase()
-                    1 -> scanSmsToFirebase()
-                    2 -> confirmDeleteAll()
-                    3 -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    4 -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }
+        override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+            if (request?.isForMainFrame == true) {
+                hasError = true
+                LogWriter.err("[WebView] 로딩 실패: ${error?.description}")
+                loadCacheFallback(view)
             }
-            .show()
+        }
     }
 
-    private data class FirebaseTx(
-        val bank: String, val type: String, val amount: Long,
-        val balance: Long, val counterparty: String, val raw: String, val ts: Long
-    )
-
-    private fun loadLedgerFromFirebase() {
-        Toast.makeText(this, "가계부 로드 중...", Toast.LENGTH_SHORT).show()
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val conn = URL(
-                    "https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app/banktotal/transactions.json"
-                ).openConnection() as HttpURLConnection
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-                val json = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-
-                if (json == "null" || json.isEmpty()) {
-                    launch(Dispatchers.Main) {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setMessage("거래 내역이 없습니다.")
-                            .setPositiveButton("확인", null)
-                            .show()
-                    }
-                    return@launch
-                }
-
-                val obj = JSONObject(json)
-                val txList = mutableListOf<FirebaseTx>()
-                obj.keys().forEach { key ->
-                    val item = obj.getJSONObject(key)
-                    txList.add(FirebaseTx(
-                        bank = item.optString("bank"),
-                        type = item.optString("type"),
-                        amount = item.optLong("amount"),
-                        balance = item.optLong("balance"),
-                        counterparty = item.optString("counterparty"),
-                        raw = item.optString("raw"),
-                        ts = item.optLong("ts")
-                    ))
-                }
-                txList.sortByDescending { it.ts }
-
-                launch(Dispatchers.Main) { showLedgerMenu(txList) }
-            } catch (e: Exception) {
-                launch(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "가계부 로드 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+    private fun saveCachePage(view: WebView?) {
+        view?.evaluateJavascript("document.documentElement.outerHTML") { html ->
+            if (html != null && html.length > 100) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val decoded = html
+                            .removePrefix("\"").removeSuffix("\"")
+                            .replace("\\n", "\n").replace("\\\"", "\"")
+                            .replace("\\/", "/").replace("\\u003C", "<")
+                        val file = File(filesDir, "dashboard_cache.html")
+                        file.writeText(decoded)
+                    } catch (_: Exception) {}
                 }
             }
         }
     }
 
-    private fun showLedgerMenu(txList: List<FirebaseTx>) {
-        val options = arrayOf("전체 내역", "입금 내역", "출금 내역", "카테고리별 합계")
-        AlertDialog.Builder(this)
-            .setTitle("가계부 (${txList.size}건)")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showTxList("전체 내역", txList)
-                    1 -> showDepositSummary(txList.filter { it.type == "입금" })
-                    2 -> showTxList("출금 내역", txList.filter { it.type == "출금" })
-                    3 -> showCategorySummary(txList.filter { it.type == "출금" })
-                }
-            }
-            .show()
-    }
-
-    private fun showTxList(title: String, txList: List<FirebaseTx>) {
-        if (txList.isEmpty()) {
-            AlertDialog.Builder(this).setMessage("내역이 없습니다.").setPositiveButton("확인", null).show()
-            return
-        }
-        val sb = StringBuilder()
-        var currentDate = ""
-        for (tx in txList.take(200)) {
-            val date = SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(tx.ts))
-            val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.ts))
-            if (date != currentDate) {
-                if (sb.isNotEmpty()) sb.append("\n")
-                sb.append("-- $date --\n")
-                currentDate = date
-            }
-            val typeIcon = if (tx.type == "입금") "+" else "-"
-            val cp = if (tx.counterparty.isNotEmpty()) " ${tx.counterparty}" else ""
-            sb.append("$time ${tx.bank} $typeIcon${decimalFormat.format(tx.amount)}$cp\n")
-        }
-        AlertDialog.Builder(this)
-            .setTitle("$title (${txList.size}건)")
-            .setMessage(sb.toString())
-            .setPositiveButton("확인", null)
-            .show()
-    }
-
-    private fun showDepositSummary(deposits: List<FirebaseTx>) {
-        if (deposits.isEmpty()) {
-            AlertDialog.Builder(this).setMessage("입금 내역이 없습니다.").setPositiveButton("확인", null).show()
-            return
-        }
-        val sb = StringBuilder()
-        val grouped = deposits.groupBy {
-            SimpleDateFormat("MM/dd", Locale.KOREA).format(Date(it.ts))
-        }
-        for ((date, txs) in grouped) {
-            val dayTotal = txs.sumOf { it.amount }
-            sb.append("-- $date  합계: ${decimalFormat.format(dayTotal)} --\n")
-            for (tx in txs) {
-                val time = SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(tx.ts))
-                val cp = if (tx.counterparty.isNotEmpty()) " ${tx.counterparty}" else ""
-                sb.append("  $time ${tx.bank} +${decimalFormat.format(tx.amount)}$cp\n")
-            }
-            sb.append("\n")
-        }
-        AlertDialog.Builder(this)
-            .setTitle("입금 내역 (${deposits.size}건)")
-            .setMessage(sb.toString())
-            .setPositiveButton("확인", null)
-            .show()
-    }
-
-    private fun showCategorySummary(withdrawals: List<FirebaseTx>) {
-        if (withdrawals.isEmpty()) {
-            AlertDialog.Builder(this).setMessage("출금 내역이 없습니다.").setPositiveButton("확인", null).show()
-            return
-        }
-        val sb = StringBuilder()
-        val grouped = withdrawals
-            .groupBy { it.counterparty.ifEmpty { "미분류" } }
-            .map { (name, txs) -> name to txs.sumOf { it.amount } }
-            .sortedByDescending { it.second }
-
-        val total = withdrawals.sumOf { it.amount }
-        sb.append("총 출금: ${decimalFormat.format(total)}\n\n")
-        for ((name, sum) in grouped) {
-            val count = withdrawals.count { (it.counterparty.ifEmpty { "미분류" }) == name }
-            sb.append("$name  ${decimalFormat.format(sum)} (${count}건)\n")
-        }
-        AlertDialog.Builder(this)
-            .setTitle("카테고리별 출금")
-            .setMessage(sb.toString())
-            .setPositiveButton("확인", null)
-            .show()
-    }
-
-
-    private fun scanSmsToFirebase() {
-        if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
-            checkSelfPermission(android.Manifest.permission.READ_SMS)) {
-            requestPermissions(arrayOf(android.Manifest.permission.READ_SMS), 200)
-            Toast.makeText(this, "SMS 읽기 권한이 필요합니다", Toast.LENGTH_SHORT).show()
-            return
-        }
-        Toast.makeText(this, "SMS 스캔 중...", Toast.LENGTH_SHORT).show()
-        CoroutineScope(Dispatchers.IO).launch {
-            val reader = SmsHistoryReader(applicationContext)
-            val result = reader.scanInbox(5000)
-            launch(Dispatchers.Main) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "SMS ${result.totalSmsRead}건 중 은행 ${result.bankSmsFound}건 → Firebase ${result.accountsUpdated}건 업로드",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    private fun confirmDeleteAll() {
-        AlertDialog.Builder(this)
-            .setTitle("데이터 초기화")
-            .setMessage("모든 계좌 데이터를 삭제하시겠습니까?\n알림으로 새로 수신되면 자동으로 다시 등록됩니다.")
-            .setPositiveButton("삭제") { _, _ ->
-                viewModel.deleteAllAccounts()
-                Toast.makeText(this, "모든 데이터가 초기화되었습니다.", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("취소", null)
-            .show()
-    }
-
-    private fun showTestMenu() {
-        val options = arrayOf("SMS 파싱 테스트 (KB/하나/신협)", "신한 알림 테스트", "전체 테스트 + DB 저장")
-        AlertDialog.Builder(this)
-            .setTitle("테스트 메뉴")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> runSmsParsingTest()
-                    1 -> runShinhanNotificationTest()
-                    2 -> runFullTestAndSave()
-                }
-            }
-            .show()
-    }
-
-    private fun runSmsParsingTest() {
-        val parserManager = SmsParserManager()
-        val shinhanParser = ShinhanNotificationParser()
-
-        val testCases = listOf(
-            Triple("KB", "15880000", "[KB]입금 500,000원 123-***-456 잔액1,234,567원"),
-            Triple("하나", "15991111", "하나은행 456-***-789 입금 300,000원 잔액 2,500,000원"),
-            Triple("신협", "15882222", "입출금안내 신협 789-***-012 출금 50,000원 잔액 800,000원"),
-        )
-
-        val results = StringBuilder("=== SMS 파싱 테스트 ===\n\n")
-        var successCount = 0
-
-        for ((bank, sender, body) in testCases) {
-            val parsed = parserManager.parse(sender, body)
-            if (parsed != null) {
-                successCount++
-                results.append("[$bank] 성공\n")
-                results.append("  은행: ${parsed.bankName}\n")
-                results.append("  계좌: ${parsed.accountNumber}\n")
-                results.append("  잔액: ${DecimalFormat("#,###").format(parsed.balance)}원\n")
-                results.append("  거래: ${parsed.transactionType} ${DecimalFormat("#,###").format(parsed.transactionAmount)}원\n\n")
-            } else {
-                results.append("[$bank] 실패 - 파싱 불가\n\n")
-            }
-        }
-
-        val shinhanResult = shinhanParser.parse("신한은행", "456-***-321 입금 1,000,000원 잔액 5,000,000원")
-        if (shinhanResult != null) {
-            successCount++
-            results.append("[신한 알림] 성공\n")
-            results.append("  은행: ${shinhanResult.bankName}\n")
-            results.append("  계좌: ${shinhanResult.accountNumber}\n")
-            results.append("  잔액: ${DecimalFormat("#,###").format(shinhanResult.balance)}원\n")
-            results.append("  거래: ${shinhanResult.transactionType} ${DecimalFormat("#,###").format(shinhanResult.transactionAmount)}원\n\n")
+    private fun loadCacheFallback(view: WebView?) {
+        val file = File(filesDir, "dashboard_cache.html")
+        if (file.exists()) {
+            val html = file.readText()
+            view?.loadDataWithBaseURL(DASHBOARD_URL, html, "text/html", "UTF-8", null)
+            LogWriter.sys("[WebView] 오프라인 캐시 로드")
         } else {
-            results.append("[신한 알림] 실패\n\n")
-        }
-
-        results.append("결과: $successCount/4 성공")
-
-        AlertDialog.Builder(this)
-            .setTitle("SMS 파싱 테스트 결과")
-            .setMessage(results.toString())
-            .setPositiveButton("확인", null)
-            .show()
-    }
-
-    private fun runShinhanNotificationTest() {
-        val parser = ShinhanNotificationParser()
-
-        val testNotifications = listOf(
-            Triple("입금 알림", "신한SOL", "123-***-456 입금 1,500,000원 잔액 8,200,000원"),
-            Triple("출금 알림", "신한SOL", "123-***-456 출금 300,000원 잔액 7,900,000원"),
-            Triple("이체 알림", "신한은행", "789-***-012 입금 50,000원 잔액 1,230,000원"),
-        )
-
-        val results = StringBuilder()
-        results.append("=== 신한 알림 파싱 테스트 ===\n\n")
-        results.append("패키지 감지: ${parser.canParse("com.shinhan.sbanking")}\n")
-        results.append("다른 앱 무시: ${!parser.canParse("com.other.app")}\n\n")
-
-        var successCount = 0
-
-        for ((label, title, text) in testNotifications) {
-            val parsed = parser.parse(title, text)
-            if (parsed != null) {
-                successCount++
-                results.append("[$label] 성공\n")
-                results.append("  계좌: ${parsed.accountNumber}\n")
-                results.append("  잔액: ${decimalFormat.format(parsed.balance)}원\n")
-                results.append("  ${parsed.transactionType} ${decimalFormat.format(parsed.transactionAmount)}원\n\n")
-            } else {
-                results.append("[$label] 실패\n\n")
-            }
-        }
-
-        val listenerEnabled = isNotificationListenerEnabled()
-        results.append("---\n")
-        results.append("알림 리스너 권한: ${if (listenerEnabled) "활성화" else "비활성화"}\n")
-        results.append("파싱 결과: $successCount/${testNotifications.size} 성공\n")
-
-        if (!listenerEnabled) {
-            results.append("\n주의: 알림 접근 권한을 활성화해야\n실제 신한SOL 알림을 감지합니다.")
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("신한 알림 테스트")
-            .setMessage(results.toString())
-            .setNeutralButton(if (!listenerEnabled) "권한 설정" else null) { _, _ ->
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            }
-            .setPositiveButton("확인", null)
-            .show()
-    }
-
-    private fun runFullTestAndSave() {
-        val parserManager = SmsParserManager()
-        val shinhanParser = ShinhanNotificationParser()
-        val repository = AccountRepository(applicationContext)
-
-        CoroutineScope(Dispatchers.IO).launch {
-            val smsTests = listOf(
-                "15880000" to "[KB]입금 500,000원 123-***-456 잔액1,234,567원",
-                "15991111" to "하나은행 456-***-789 입금 300,000원 잔액 2,500,000원",
-                "15882222" to "입출금안내 신협 789-***-012 출금 50,000원 잔액 800,000원",
+            view?.loadData(
+                "<html><body style='background:#121212;color:#888;text-align:center;padding-top:100px;font-family:sans-serif'>" +
+                        "<h2>연결 실패</h2><p>인터넷 연결을 확인해주세요</p></body></html>",
+                "text/html", "UTF-8"
             )
-            var count = 0
-            for ((sender, body) in smsTests) {
-                val parsed = parserManager.parse(sender, body) ?: continue
-                repository.upsertFromSms(parsed)
-                count++
-            }
-
-            val shinhanTests = listOf(
-                "신한SOL" to "123-***-456 입금 1,500,000원 잔액 8,200,000원",
-                "신한은행" to "789-***-012 입금 50,000원 잔액 1,230,000원",
-            )
-            for ((title, text) in shinhanTests) {
-                val parsed = shinhanParser.parse(title, text) ?: continue
-                repository.upsertFromSms(parsed)
-                count++
-            }
-
-            launch(Dispatchers.Main) {
-                Toast.makeText(this@MainActivity, "전체 $count 건 저장 완료! 총 잔액이 갱신됩니다.", Toast.LENGTH_LONG).show()
-            }
         }
     }
 
-    private fun showAddDialog() {
-        val dialogBinding = DialogAccountBinding.inflate(LayoutInflater.from(this))
-
-        AlertDialog.Builder(this, R.style.Theme_BankTotal)
-            .setTitle("계좌 추가")
-            .setView(dialogBinding.root)
-            .setPositiveButton("추가") { _, _ ->
-                val bankName = dialogBinding.etBankName.text.toString().trim()
-                val accountNumber = dialogBinding.etAccountNumber.text.toString().trim()
-                val displayName = dialogBinding.etDisplayName.text.toString().trim()
-                val balance = dialogBinding.etBalance.text.toString().toLongOrNull() ?: 0L
-
-                if (bankName.isNotEmpty() && accountNumber.isNotEmpty()) {
-                    viewModel.addManualAccount(bankName, accountNumber, displayName, balance)
+    // --- NativeBridge ---
+    inner class NativeBridge {
+        @JavascriptInterface
+        fun getAccountsJson(): String {
+            return runBlocking(Dispatchers.IO) {
+                try {
+                    val dao = BankDatabase.getInstance(applicationContext).accountDao()
+                    val accounts = dao.getAllAccountsSync()
+                    val arr = JSONArray()
+                    accounts.forEach { a ->
+                        val obj = JSONObject()
+                        obj.put("id", a.id)
+                        obj.put("bankName", a.bankName)
+                        obj.put("accountNumber", a.accountNumber)
+                        obj.put("displayName", a.displayName)
+                        obj.put("balance", a.balance)
+                        obj.put("lastTransactionType", a.lastTransactionType)
+                        obj.put("lastTransactionAmount", a.lastTransactionAmount)
+                        obj.put("lastUpdated", a.lastUpdated)
+                        obj.put("isActive", a.isActive)
+                        arr.put(obj)
+                    }
+                    arr.toString()
+                } catch (e: Exception) {
+                    "[]"
                 }
             }
-            .setNegativeButton("취소", null)
-            .show()
+        }
+
+        @JavascriptInterface
+        fun getPermissions(): String {
+            val obj = JSONObject()
+            obj.put("notification", isNotificationListenerEnabled())
+            obj.put("accessibility", isAccessibilityEnabled())
+            return obj.toString()
+        }
+
+        @JavascriptInterface
+        fun openNotificationSettings() {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+
+        @JavascriptInterface
+        fun openAccessibilitySettings() {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        @JavascriptInterface
+        fun getAppVersion(): String {
+            return try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+            } catch (_: Exception) { "" }
+        }
     }
 
-    private fun showEditDialog(account: AccountEntity) {
-        val dialogBinding = DialogAccountBinding.inflate(LayoutInflater.from(this))
-        dialogBinding.etBankName.setText(account.bankName)
-        dialogBinding.etAccountNumber.setText(account.accountNumber)
-        dialogBinding.etDisplayName.setText(account.displayName)
-        dialogBinding.etBalance.setText(account.balance.toString())
-
-        AlertDialog.Builder(this, R.style.Theme_BankTotal)
-            .setTitle("계좌 편집")
-            .setView(dialogBinding.root)
-            .setPositiveButton("저장") { _, _ ->
-                val updatedAccount = account.copy(
-                    bankName = dialogBinding.etBankName.text.toString().trim(),
-                    accountNumber = dialogBinding.etAccountNumber.text.toString().trim(),
-                    displayName = dialogBinding.etDisplayName.text.toString().trim(),
-                    balance = dialogBinding.etBalance.text.toString().toLongOrNull() ?: account.balance
-                )
-                viewModel.updateAccount(updatedAccount)
-            }
-            .setNegativeButton("취소", null)
-            .show()
-    }
-
-    private fun showAccountOptions(account: AccountEntity) {
-        val activeLabel = if (account.isActive) "합산 제외" else "합산 포함"
-        val options = arrayOf(activeLabel, "삭제")
-
-        AlertDialog.Builder(this)
-            .setTitle(account.displayName.ifEmpty { account.accountNumber })
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> viewModel.toggleActive(account)
-                    1 -> confirmDelete(account)
-                }
-            }
-            .show()
-    }
-
-    private fun confirmDelete(account: AccountEntity) {
-        AlertDialog.Builder(this)
-            .setTitle("삭제 확인")
-            .setMessage("${account.bankName} ${account.accountNumber} 계좌를 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ -> viewModel.deleteAccount(account) }
-            .setNegativeButton("취소", null)
-            .show()
-    }
-
+    // --- 권한 ---
     private fun requestPermissions() {
-        // Android 13+ POST_NOTIFICATIONS 권한 필요
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
-                smsPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                notifPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
             }
         }
 
         if (!isNotificationListenerEnabled()) {
             AlertDialog.Builder(this)
                 .setTitle("알림 접근 권한")
-                .setMessage("은행 알림을 읽으려면 알림 접근 권한이 필요합니다. 설정으로 이동하시겠습니까?")
+                .setMessage("은행 알림을 읽으려면 알림 접근 권한이 필요합니다.")
                 .setPositiveButton("설정으로 이동") { _, _ ->
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }
@@ -557,5 +207,14 @@ class MainActivity : AppCompatActivity() {
     private fun isNotificationListenerEnabled(): Boolean {
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
         return flat?.contains(packageName) == true
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val flat = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        return flat?.contains(packageName) == true
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 }

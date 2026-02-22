@@ -6,6 +6,7 @@ import com.banktotal.app.data.parser.ParsedTransaction
 import com.banktotal.app.data.parser.ShinhanNotificationParser
 import com.banktotal.app.data.parser.extractCounterparty
 import com.banktotal.app.data.repository.AccountRepository
+import com.banktotal.app.service.LogWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,19 +30,24 @@ class BankNotificationListenerService : NotificationListenerService() {
         val title = extras.getString("android.title") ?: ""
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
+        LogWriter.tx("알림 수신: pkg=$packageName title=$title")
+
         val parsed: ParsedTransaction?
 
         if (shinhanParser.canParse(packageName)) {
-            // 신한 앱 알림
             parsed = shinhanParser.parse(title, text)
         } else if (packageName in messagingPackages) {
-            // 삼성/구글 메시지 앱 알림 (SMS/RCS)
             parsed = parseMessageNotification(title, text)
         } else {
             return
         }
 
-        parsed ?: return
+        if (parsed == null) {
+            LogWriter.parse("파싱 실패: $text")
+            return
+        }
+
+        LogWriter.parse("파싱 성공: ${parsed.bankName} ${parsed.transactionType} ${parsed.transactionAmount}원 잔액${parsed.balance}원")
 
         val repository = AccountRepository(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {

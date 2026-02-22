@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>BankTotal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
+.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:sticky;top:0;z-index:10}
+.subtotal-row{color:#aaa;font-size:14px;margin-bottom:2px;display:none}
+.subtotal-row.show{display:block}
+.subtotal-val{font-size:18px;color:#bbb}
+.total-label{color:#888;font-size:14px;margin-top:4px}
+.total-val{font-size:32px;font-weight:bold;color:#fff;margin:4px 0}
+.last-update{color:#666;font-size:12px}
+.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:0;z-index:9}
+.tab{flex:1;min-width:60px;padding:10px 8px;text-align:center;font-size:13px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.tab.active{color:#4fc3f7;border-bottom-color:#4fc3f7}
+.section{display:none;padding:12px}
+.section.active{display:block}
+.card{background:#1e1e30;border-radius:10px;padding:12px;margin-bottom:8px}
+.card-row{display:flex;justify-content:space-between;align-items:center}
+.bank-name{font-size:13px;color:#888;min-width:40px}
+.alias{font-size:15px;color:#e0e0e0}
+.balance{font-size:18px;font-weight:bold;color:#4fc3f7;text-align:right}
+.balance.negative{color:#ef5350}
+.inactive .balance{opacity:.5}
+.inactive .alias{opacity:.5}
+.last-tx{font-size:11px;color:#666;margin-top:4px}
+.active-badge{font-size:10px;padding:2px 6px;border-radius:8px;background:#4caf5033;color:#4caf50}
+.inactive .active-badge{background:#99999933;color:#999}
+.filter-row{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.filter-btn{padding:6px 12px;border-radius:16px;border:1px solid #333;background:transparent;color:#aaa;font-size:12px;cursor:pointer}
+.filter-btn.active{background:#4fc3f7;color:#121212;border-color:#4fc3f7}
+.tx-group{margin-bottom:12px}
+.tx-date{font-size:12px;color:#666;padding:4px 0;border-bottom:1px solid #222}
+.tx-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1a1a1a}
+.tx-left{display:flex;flex-direction:column;gap:2px}
+.tx-bank{font-size:11px;color:#888}
+.tx-cp{font-size:13px;color:#ccc}
+.tx-time{font-size:10px;color:#555}
+.tx-amount{font-size:15px;font-weight:bold;text-align:right}
+.tx-amount.in{color:#4caf50}
+.tx-amount.out{color:#ef5350}
+.tx-balance{font-size:10px;color:#666;text-align:right}
+.cat-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a}
+.cat-name{font-size:14px;color:#ccc}
+.cat-count{font-size:11px;color:#666}
+.cat-amount{font-size:16px;font-weight:bold;color:#ef5350}
+.log-item{padding:6px 0;border-bottom:1px solid #1a1a1a;font-family:monospace;font-size:12px}
+.log-ts{color:#555}
+.log-tag{font-weight:bold;margin:0 4px}
+.log-tag.tx{color:#4caf50}
+.log-tag.parse{color:#4fc3f7}
+.log-tag.err{color:#ef5350}
+.log-tag.sys{color:#ff9800}
+.log-msg{color:#ccc}
+.perm-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#1e1e30;border-radius:10px;margin-bottom:8px}
+.perm-name{font-size:14px;color:#ccc}
+.perm-status{font-size:13px;font-weight:bold;padding:4px 10px;border-radius:12px}
+.perm-status.on{background:#4caf5033;color:#4caf50}
+.perm-status.off{background:#ef535033;color:#ef5350;cursor:pointer}
+.summary-box{background:#1e1e30;border-radius:10px;padding:16px;margin-bottom:12px;text-align:center}
+.summary-label{font-size:12px;color:#888}
+.summary-val{font-size:24px;font-weight:bold;color:#4fc3f7;margin-top:4px}
+.summary-row{display:flex;gap:8px}
+.summary-row .summary-box{flex:1}
+.empty{text-align:center;color:#555;padding:40px 0;font-size:14px}
+.version{text-align:center;color:#444;font-size:11px;padding:20px 0}
+</style>
+</head>
+<body>
+
+<div class="header" id="header">
+    <div class="subtotal-row" id="subtotalRow">
+        소계 <span class="subtotal-val" id="subtotalVal">0</span>
+    </div>
+    <div class="total-label">합계</div>
+    <div class="total-val" id="totalVal">0</div>
+    <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="showTab('accounts')">계좌</div>
+    <div class="tab" onclick="showTab('ledger')">가계부</div>
+    <div class="tab" onclick="showTab('logs')">로그</div>
+    <div class="tab" onclick="showTab('perms')">권한</div>
+</div>
+
+<div class="section active" id="sec-accounts">
+    <div id="accountList"></div>
+</div>
+
+<div class="section" id="sec-ledger">
+    <div class="filter-row" id="ledgerFilter">
+        <div class="filter-btn active" onclick="setLedgerFilter('all')">전체</div>
+        <div class="filter-btn" onclick="setLedgerFilter('in')">입금</div>
+        <div class="filter-btn" onclick="setLedgerFilter('out')">출금</div>
+        <div class="filter-btn" onclick="setLedgerFilter('cat')">카테고리</div>
+    </div>
+    <div id="ledgerSummary"></div>
+    <div id="ledgerContent"></div>
+</div>
+
+<div class="section" id="sec-logs">
+    <div class="filter-row" id="logFilter">
+        <div class="filter-btn active" onclick="setLogFilter('all')">전체</div>
+        <div class="filter-btn" onclick="setLogFilter('[TX]')">TX</div>
+        <div class="filter-btn" onclick="setLogFilter('[PARSE]')">PARSE</div>
+        <div class="filter-btn" onclick="setLogFilter('[ERR]')">ERR</div>
+        <div class="filter-btn" onclick="setLogFilter('[SYS]')">SYS</div>
+    </div>
+    <div id="logContent"></div>
+</div>
+
+<div class="section" id="sec-perms">
+    <div id="permContent"></div>
+</div>
+
+<div class="version" id="versionInfo">BankTotal Web Dashboard</div>
+
+<script>
+const FB='https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
+const fmt=n=>{if(n==null)return'0';const s=n<0;const a=Math.abs(n);return(s?'-':'')+a.toString().replace(/\B(?=(\d{3})+(?!\d))/g,',')};
+const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
+const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
+const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
+
+let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='all',logFilterTag='all';
+
+// --- 탭 관리 ---
+function showTab(name){
+    currentTab=name;
+    document.querySelectorAll('.tab').forEach((t,i)=>{
+        t.classList.toggle('active',['accounts','ledger','logs','perms'][i]===name);
+    });
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('sec-'+name).classList.add('active');
+    if(name==='perms')renderPermissions();
+}
+
+// --- Firebase SSE ---
+function connectSSE(path,handler){
+    const es=new EventSource(FB+path+'.json');
+    es.onmessage=e=>{
+        try{handler(JSON.parse(e.data));}catch(ex){}
+    };
+    es.onerror=()=>{setTimeout(()=>connectSSE(path,handler),5000);es.close()};
+    // 초기 로드 (SSE put 이벤트 전에 REST로 즉시 로드)
+    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{if(d)handler(d);}).catch(()=>{});
+}
+
+function initSSE(){
+    connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
+    connectSSE('/banktotal/transactions',d=>{
+        if(!d){transactions=[];renderLedger();return;}
+        transactions=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        renderLedger();
+    });
+    connectSSE('/banktotal/logs',d=>{
+        if(!d){logs=[];renderLogs();return;}
+        logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        renderLogs();
+    });
+}
+
+// --- NativeBridge 지원 (앱 내 WebView) ---
+function loadFromNative(){
+    if(typeof NativeBridge==='undefined')return false;
+    try{
+        const json=NativeBridge.getAccountsJson();
+        if(json){
+            const list=JSON.parse(json);
+            renderNativeAccounts(list);
+        }
+    }catch(e){}
+    return true;
+}
+
+function renderNativeAccounts(list){
+    let total=0,subtotal=0;
+    list.forEach(a=>{
+        if(a.isActive){total+=a.balance;if(a.balance>=0)subtotal+=a.balance;}
+    });
+    document.getElementById('totalVal').textContent=fmt(total);
+    if(subtotal!==total){
+        document.getElementById('subtotalRow').classList.add('show');
+        document.getElementById('subtotalVal').textContent=fmt(subtotal);
+    }else{
+        document.getElementById('subtotalRow').classList.remove('show');
+    }
+    const lastUp=Math.max(...list.map(a=>a.lastUpdated||0));
+    document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
+
+    const html=list.map(a=>{
+        const inactive=!a.isActive?'inactive':'';
+        const balCls=a.balance<0?'balance negative':'balance';
+        const lastTx=a.lastTransactionType?(
+            `${a.lastTransactionType} ${fmt(a.lastTransactionAmount)} · ${tsFmt(a.lastUpdated)}`
+        ):(a.lastUpdated>0?tsFmt(a.lastUpdated):'');
+        const badge=a.isActive?'합산 포함':'합산 제외';
+        const badgeCls=a.isActive?'active-badge':'active-badge';
+        return`<div class="card ${inactive}">
+            <div class="card-row"><div><span class="bank-name">${a.bankName}</span> <span class="alias">${a.displayName||a.accountNumber}</span></div><div class="${balCls}">${fmt(a.balance)}</div></div>
+            <div class="card-row" style="margin-top:4px"><span class="last-tx">${lastTx}</span><span class="${badgeCls}">${badge}</span></div>
+        </div>`;
+    }).join('');
+    document.getElementById('accountList').innerHTML=html||'<div class="empty">계좌 없음</div>';
+}
+
+// --- 계좌 렌더링 (Firebase) ---
+function renderAccounts(){
+    const list=Object.values(accounts);
+    if(!list.length){
+        document.getElementById('accountList').innerHTML='<div class="empty">계좌 없음</div>';
+        document.getElementById('totalVal').textContent='0';
+        return;
+    }
+    let total=0;
+    list.forEach(a=>total+=a.balance||0);
+    document.getElementById('totalVal').textContent=fmt(total);
+
+    const lastUp=Math.max(...list.map(a=>a.updated||0));
+    document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
+
+    const html=list.sort((a,b)=>(a.bank||'').localeCompare(b.bank||'')).map(a=>{
+        const balCls=a.balance<0?'balance negative':'balance';
+        return`<div class="card">
+            <div class="card-row"><div><span class="bank-name">${a.bank||''}</span> <span class="alias">${a.account||''}</span></div><div class="${balCls}">${fmt(a.balance)}</div></div>
+            <div class="card-row" style="margin-top:4px"><span class="last-tx">${a.updated?tsFmt(a.updated):''}</span></div>
+        </div>`;
+    }).join('');
+    document.getElementById('accountList').innerHTML=html;
+}
+
+// --- 가계부 렌더링 ---
+function setLedgerFilter(mode){
+    ledgerMode=mode;
+    document.querySelectorAll('#ledgerFilter .filter-btn').forEach(b=>b.classList.remove('active'));
+    event.target.classList.add('active');
+    renderLedger();
+}
+
+function renderLedger(){
+    const el=document.getElementById('ledgerContent');
+    const sum=document.getElementById('ledgerSummary');
+    if(!transactions.length){el.innerHTML='<div class="empty">거래 내역 없음</div>';sum.innerHTML='';return;}
+
+    let filtered=transactions;
+    if(ledgerMode==='in')filtered=transactions.filter(t=>t.type==='입금');
+    if(ledgerMode==='out')filtered=transactions.filter(t=>t.type==='출금');
+
+    if(ledgerMode==='cat'){
+        renderCategory(transactions.filter(t=>t.type==='출금'));
+        return;
+    }
+
+    // 요약
+    const totalIn=transactions.filter(t=>t.type==='입금').reduce((s,t)=>s+(t.amount||0),0);
+    const totalOut=transactions.filter(t=>t.type==='출금').reduce((s,t)=>s+(t.amount||0),0);
+    sum.innerHTML=`<div class="summary-row">
+        <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4caf50">+${fmt(totalIn)}</div></div>
+        <div class="summary-box"><div class="summary-label">출금</div><div class="summary-val" style="color:#ef5350">-${fmt(totalOut)}</div></div>
+    </div>`;
+
+    // 날짜별 그룹
+    const grouped={};
+    filtered.forEach(t=>{
+        const d=dateFmt(t.ts);
+        if(!grouped[d])grouped[d]=[];
+        grouped[d].push(t);
+    });
+
+    let html='';
+    for(const[date,txs]of Object.entries(grouped)){
+        const dayTotal=txs.reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
+        html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>=0?'#4caf50':'#ef5350'}">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span></div>`;
+        txs.forEach(t=>{
+            const isIn=t.type==='입금';
+            html+=`<div class="tx-item">
+                <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance">잔액 ${fmt(t.balance)}</div></div>
+            </div>`;
+        });
+        html+='</div>';
+    }
+    el.innerHTML=html;
+}
+
+function renderCategory(withdrawals){
+    const sum=document.getElementById('ledgerSummary');
+    const el=document.getElementById('ledgerContent');
+    if(!withdrawals.length){el.innerHTML='<div class="empty">출금 내역 없음</div>';sum.innerHTML='';return;}
+
+    const total=withdrawals.reduce((s,t)=>s+(t.amount||0),0);
+    sum.innerHTML=`<div class="summary-box"><div class="summary-label">총 출금</div><div class="summary-val" style="color:#ef5350">-${fmt(total)}</div></div>`;
+
+    const cats={};
+    withdrawals.forEach(t=>{
+        const name=t.counterparty||'미분류';
+        if(!cats[name])cats[name]={amount:0,count:0};
+        cats[name].amount+=t.amount||0;
+        cats[name].count++;
+    });
+
+    const sorted=Object.entries(cats).sort((a,b)=>b[1].amount-a[1].amount);
+    let html='';
+    sorted.forEach(([name,data])=>{
+        html+=`<div class="cat-item"><div><div class="cat-name">${name}</div><div class="cat-count">${data.count}건</div></div><div class="cat-amount">-${fmt(data.amount)}</div></div>`;
+    });
+    el.innerHTML=html;
+}
+
+// --- 로그 렌더링 ---
+function setLogFilter(tag){
+    logFilterTag=tag;
+    document.querySelectorAll('#logFilter .filter-btn').forEach(b=>b.classList.remove('active'));
+    event.target.classList.add('active');
+    renderLogs();
+}
+
+function renderLogs(){
+    const el=document.getElementById('logContent');
+    if(!logs.length){el.innerHTML='<div class="empty">로그 없음</div>';return;}
+
+    let filtered=logs;
+    if(logFilterTag!=='all')filtered=logs.filter(l=>(l.tag||'')===logFilterTag);
+
+    const html=filtered.slice(0,200).map(l=>{
+        const tagCls=(l.tag||'').replace(/[\[\]]/g,'').toLowerCase();
+        return`<div class="log-item"><span class="log-ts">${tsFmt(l.ts)}</span><span class="log-tag ${tagCls}">${l.tag||''}</span><span class="log-msg">${l.msg||''}</span></div>`;
+    }).join('');
+    el.innerHTML=html||'<div class="empty">필터 결과 없음</div>';
+}
+
+// --- 권한 렌더링 ---
+function renderPermissions(){
+    const el=document.getElementById('permContent');
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            const json=NativeBridge.getPermissions();
+            const p=JSON.parse(json);
+            const ver=NativeBridge.getAppVersion();
+            el.innerHTML=`
+                <div class="perm-item"><span class="perm-name">알림 접근 권한</span><span class="perm-status ${p.notification?'on':'off'}" onclick="${!p.notification?'NativeBridge.openNotificationSettings()':''}">${p.notification?'활성':'비활성'}</span></div>
+                <div class="perm-item"><span class="perm-name">접근성 권한 (BBQ)</span><span class="perm-status ${p.accessibility?'on':'off'}" onclick="${!p.accessibility?'NativeBridge.openAccessibilitySettings()':''}">${p.accessibility?'활성':'비활성'}</span></div>
+                <div class="perm-item"><span class="perm-name">앱 버전</span><span style="color:#888">${ver}</span></div>
+            `;
+            document.getElementById('versionInfo').textContent=`BankTotal v${ver}`;
+        }catch(e){
+            el.innerHTML='<div class="empty">권한 정보 로드 실패</div>';
+        }
+    }else{
+        el.innerHTML=`
+            <div class="perm-item"><span class="perm-name">알림 접근 권한</span><span class="perm-status off">웹 모드</span></div>
+            <div class="perm-item"><span class="perm-name">접근성 권한 (BBQ)</span><span class="perm-status off">웹 모드</span></div>
+            <div class="perm-item"><span class="perm-name">모드</span><span style="color:#4fc3f7">웹 브라우저</span></div>
+        `;
+    }
+}
+
+// --- 초기화 ---
+window.onload=function(){
+    if(typeof NativeBridge!=='undefined'){
+        loadFromNative();
+        // 네이티브에서도 Firebase SSE로 거래/로그 데이터 로드
+        initSSE();
+    }else{
+        initSSE();
+    }
+    renderPermissions();
+
+    // 앱에서 호출할 수 있는 리프레시 함수
+    window.refreshFromNative=function(){loadFromNative();};
+};
+</script>
+</body>
+</html>

@@ -44,11 +44,14 @@ object FirebaseTransactionWriter {
                 conn.disconnect()
                 if (code in 200..299) {
                     Log.d(TAG, "거래 저장: ${parsed.transactionType} ${parsed.transactionAmount} → HTTP $code")
+                    LogWriter.tx("Firebase 거래 저장: ${parsed.bankName} ${parsed.transactionType} ${parsed.transactionAmount}원")
                 } else {
                     Log.w(TAG, "거래 저장 실패: HTTP $code")
+                    LogWriter.err("Firebase 거래 저장 실패: HTTP $code")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "거래 저장 실패: ${e.message}")
+                LogWriter.err("Firebase 거래 저장 예외: ${e.message}")
             }
         }
     }
@@ -76,9 +79,11 @@ object FirebaseTransactionWriter {
                 conn.disconnect()
                 if (code !in 200..299) {
                     Log.w(TAG, "계좌 잔고 동기화 실패: HTTP $code")
+                    LogWriter.err("Firebase 잔고 동기화 실패: HTTP $code")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "계좌 잔고 동기화 실패: ${e.message}")
+                LogWriter.err("Firebase 잔고 동기화 예외: ${e.message}")
             }
         }
     }

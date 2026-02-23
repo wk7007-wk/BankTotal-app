@@ -902,10 +902,12 @@ ${ctx}
 
 async function executeAiAction(act){
     if(act.act==='add'){
+        // 중복 방지: 같은 이름+금액+타입+주기 항목이 이미 있으면 스킵
+        const dup=settleManual.find(m=>m.name===(act.name||'항목')&&m.amount===(act.amount||0)&&m.type===(act.txType||'입금')&&m.cycle===(act.cycle||'daily'));
+        if(dup){aiMessages[aiMessages.length-1].text+=' (이미 등록됨, 중복 스킵)';return}
         const entry={name:act.name||'항목',amount:act.amount||0,type:act.txType||'입금',cycle:act.cycle||'daily',ts:Date.now()};
         if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
         else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
-        // cycle:"none" → 날짜 미지정 밀린금액 (dayOfWeek/dayOfMonth 불필요)
         const id='sm_'+Date.now();
         await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)});
     }else if(act.act==='del'){

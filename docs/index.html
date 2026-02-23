@@ -89,8 +89,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="tabs">
     <div class="tab active" onclick="showTab('accounts')">계좌</div>
     <div class="tab" onclick="showTab('ledger')">가계부</div>
-    <div class="tab" onclick="showTab('logs')">로그</div>
-    <div class="tab" onclick="showTab('perms')">권한</div>
+    <div class="tab" onclick="showTab('more')">더보기</div>
 </div>
 
 <div class="section active" id="sec-accounts">
@@ -106,6 +105,11 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     </div>
     <div id="ledgerSummary"></div>
     <div id="ledgerContent"></div>
+</div>
+
+<div class="section" id="sec-more">
+    <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:15px;color:#4fc3f7">로그 뷰어</div>
+    <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:15px;color:#4fc3f7">권한 상태</div>
 </div>
 
 <div class="section" id="sec-logs">
@@ -134,11 +138,30 @@ const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStar
 
 let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
 
+// --- 동일계좌 이체 필터 (동일금액+5분내+다른은행+입출금반대) ---
+function filterTransfers(txList){
+    const sorted=[...txList].sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const skip=new Set();
+    for(let i=0;i<sorted.length;i++){
+        if(skip.has(i))continue;
+        for(let j=i+1;j<sorted.length;j++){
+            if(skip.has(j))continue;
+            const a=sorted[i],b=sorted[j];
+            if(Math.abs((a.ts||0)-(b.ts||0))>300000)break;// 5분 초과면 중단
+            if(a.amount===b.amount&&a.type!==b.type&&a.bank!==b.bank){
+                skip.add(i);skip.add(j);break;
+            }
+        }
+    }
+    return sorted.filter((_,i)=>!skip.has(i));
+}
+
 // --- 탭 관리 ---
 function showTab(name){
     currentTab=name;
     document.querySelectorAll('.tab').forEach((t,i)=>{
-        t.classList.toggle('active',['accounts','ledger','logs','perms'][i]===name);
+        const tabs=['accounts','ledger','more'];
+        t.classList.toggle('active',tabs[i]===name||(name==='logs'&&i===2)||(name==='perms'&&i===2));
     });
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
@@ -160,7 +183,7 @@ function initSSE(){
     connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
-        transactions=Object.values(d).filter(t=>(t.counterparty||'').indexOf('이원규')===-1).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        transactions=filterTransfers(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLedger();
     });
     connectSSE('/banktotal/logs',d=>{

@@ -52,10 +52,8 @@ class AccountRepository(private val context: Context) {
             )
         }
         LogWriter.tx("DB 저장: ${parsed.bankName} ${parsed.accountNumber} 잔액${parsed.balance}원")
-        // Firebase에 모든 거래 저장 ("이원규" = 통장간 이동 제외)
-        if (!parsed.counterparty.contains("이원규")) {
-            FirebaseTransactionWriter.save(parsed)
-        }
+        // Firebase에 모든 거래 저장 (동일계좌 이체 필터는 웹에서 처리)
+        FirebaseTransactionWriter.save(parsed)
         // Firebase에 계좌 잔고 동기화
         FirebaseTransactionWriter.saveAccountBalance(parsed)
         refreshDisplays()

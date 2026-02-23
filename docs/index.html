@@ -445,7 +445,33 @@ function renderPermissions(){
 let itemState={};
 function ist(k){if(!itemState[k])itemState[k]={ex:false,sh:0};return itemState[k]}
 function toggleItem(k){ist(k).ex=!ist(k).ex;renderSettle()}
-function moveItem(k,delta){ist(k).sh+=delta;renderSettle()}
+
+// 스와이프 드래그 — 좌우=날짜이동, 탭=포함/제외
+let swSt=null;
+function swStart(e,key){swSt={key,sx:e.touches[0].clientX,sy:e.touches[0].clientY,el:e.currentTarget,sw:false}}
+document.addEventListener('touchmove',function(e){
+    if(!swSt)return;
+    const dx=e.touches[0].clientX-swSt.sx;
+    const dy=e.touches[0].clientY-swSt.sy;
+    if(!swSt.sw&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>12){swSt.sw=true}
+    if(swSt.sw){
+        e.preventDefault();
+        swSt.el.style.transform=`translateX(${dx}px)`;
+        swSt.el.style.opacity=Math.max(0.3,1-Math.abs(dx)/200);
+        swSt.dx=dx;
+    }
+},{passive:false});
+document.addEventListener('touchend',function(e){
+    if(!swSt)return;
+    swSt.el.style.transform='';swSt.el.style.opacity='';swSt.el.style.transition='transform .2s,opacity .2s';
+    setTimeout(()=>{if(swSt&&swSt.el)swSt.el.style.transition=''},200);
+    if(swSt.sw){
+        const dx=swSt.dx||0;
+        const days=Math.round(dx/60);
+        if(days!==0){ist(swSt.key).sh+=days;renderSettle()}
+    }else{toggleItem(swSt.key)}
+    swSt=null;
+})
 
 function renderSettle(){
     const sum=document.getElementById('settleSummary');
@@ -470,18 +496,16 @@ function renderSettle(){
     items.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
 
     let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
-        <span style="min-width:50px;font-size:10px;color:#666">시점</span>
-        <span style="flex:1;font-size:10px;color:#666">내역</span>
-        <span style="min-width:55px;text-align:right;font-size:10px;color:#666">금액</span>
-        <span style="min-width:36px"></span>
+        <span style="min-width:55px;font-size:10px;color:#666">시점</span>
+        <span style="flex:1;font-size:10px;color:#666">내역 <span style="color:#444">탭=제외 · 좌우드래그=이동</span></span>
+        <span style="min-width:60px;text-align:right;font-size:10px;color:#666">금액</span>
         <span style="min-width:70px;text-align:right;font-size:10px;color:#666">예상잔고</span>
     </div>`;
 
     html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">
-        <span style="min-width:50px;font-size:12px;color:#4fc3f7">현재</span>
+        <span style="min-width:55px;font-size:12px;color:#4fc3f7">현재</span>
         <span style="flex:1;font-size:12px;color:#aaa">잔고</span>
-        <span style="min-width:55px"></span>
-        <span style="min-width:36px"></span>
+        <span style="min-width:60px"></span>
         <span style="min-width:70px;text-align:right;font-size:14px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
     </div>`;
 
@@ -505,24 +529,19 @@ function renderSettle(){
                 const dl=j===0?`${dk}(${dayName})`:'';
                 const tag=u.isPending?' ⚡':'';
                 const stk=u.excluded?'text-decoration:line-through;':'';
-                html+=`<div style="display:flex;align-items:center;padding:5px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}">
-                    <span style="min-width:50px;font-size:11px;color:${dayColor}">${dl}</span>
-                    <span onclick="toggleItem('${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer">${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk}">${isIn?'+':'-'}${fmt(u.amount)}</span>
-                    <span style="min-width:36px;display:flex;gap:1px;justify-content:center">
-                        <span onclick="moveItem('${u._key}',-1)" style="width:17px;height:20px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:3px;color:#888;font-size:9px;cursor:pointer">◀</span>
-                        <span onclick="moveItem('${u._key}',1)" style="width:17px;height:20px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:3px;color:#888;font-size:9px;cursor:pointer">▶</span>
-                    </span>
+                html+=`<div ontouchstart="swStart(event,'${u._key}')" style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}touch-action:pan-y">
+                    <span style="min-width:55px;font-size:11px;color:${dayColor}">${dl}</span>
+                    <span style="flex:1;font-size:12px;color:${nmC}">${u.name}${u.overdue?' (지연)':''}${tag}</span>
+                    <span style="min-width:60px;text-align:right;font-size:12px;color:${amtC};${stk}">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:70px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
                 </div>`;
             });
         }else{
             const bg=isToday?'background:#4fc3f711;':'';
-            html+=`<div style="display:flex;align-items:center;padding:5px 4px;border-bottom:1px solid #1a1a1a;${bg}">
-                <span style="min-width:50px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
+            html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
+                <span style="min-width:55px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
                 <span style="flex:1"></span>
-                <span style="min-width:55px"></span>
-                <span style="min-width:36px"></span>
+                <span style="min-width:60px"></span>
                 <span style="min-width:70px;text-align:right;font-size:13px;color:#555">${fmt(bal)}</span>
             </div>`;
         }

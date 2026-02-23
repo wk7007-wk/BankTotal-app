@@ -733,34 +733,44 @@ ${ctx}
 액션 태그 앞에 확인 메시지를 먼저 쓰세요. 여러 액션은 각각 별도 [ACTION]...[/ACTION]으로.`;
 
     const body=JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]});
-    aiMessages[aiMessages.length-1].text=`전송 중... (${Math.round(body.length/1024)}KB)`;
+    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+    aiMessages[aiMessages.length-1].text='전송 '+Math.round(body.length/1024)+'KB...';
     renderAiMsgs();
     const t0=Date.now();
-    const prog=setInterval(()=>{aiMessages[aiMessages.length-1].text=`분석 중... ${Math.round((Date.now()-t0)/1000)}초`;renderAiMsgs()},2000);
-    try{
-        const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('15초 타임아웃')),15000));
-        const req=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
-            method:'POST',headers:{'Content-Type':'application/json'},body
-        }).then(async r=>{
-            if(!r.ok)throw new Error('HTTP '+r.status+': '+(await r.text().catch(()=>'')).substring(0,150));
-            return r.json();
-        });
-        const d=await Promise.race([req,timeout]);
-        let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||'';
-        if(!reply){
-            const block=d?.promptFeedback?.blockReason||d?.candidates?.[0]?.finishReason||'';
-            reply=block?'차단: '+block:(d?.error?.message||JSON.stringify(d).substring(0,200));
+    const prog=setInterval(()=>{const s=Math.round((Date.now()-t0)/1000);aiMessages[aiMessages.length-1].text='AI응답 대기 '+s+'초...';renderAiMsgs()},1500);
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',url,true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.timeout=15000;
+    xhr.onload=async function(){
+        clearInterval(prog);
+        try{
+            const d=JSON.parse(xhr.responseText);
+            let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+            if(!reply){
+                const block=d?.promptFeedback?.blockReason||d?.candidates?.[0]?.finishReason||'';
+                reply=block?'차단: '+block:(d?.error?.message||xhr.responseText.substring(0,200));
+            }
+            const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+            for(const m of actionMatches){try{await executeAiAction(JSON.parse(m[1]))}catch(e){}}
+            if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+            aiMessages[aiMessages.length-1].text=reply;
+        }catch(pe){
+            aiMessages[aiMessages.length-1].text='파싱에러: '+xhr.responseText.substring(0,150);
         }
-        const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
-        for(const m of actionMatches){try{await executeAiAction(JSON.parse(m[1]))}catch(e){}}
-        if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
-        aiMessages[aiMessages.length-1].text=reply;
-    }catch(e){
-        aiMessages[aiMessages.length-1].text='오류: '+(e.message||String(e));
-    }
-    clearInterval(prog);
-    btn.disabled=false;btn.textContent='전송';
-    renderAiMsgs();
+        btn.disabled=false;btn.textContent='전송';renderAiMsgs();
+    };
+    xhr.onerror=function(){
+        clearInterval(prog);
+        aiMessages[aiMessages.length-1].text='네트워크 에러 (status:'+xhr.status+')';
+        btn.disabled=false;btn.textContent='전송';renderAiMsgs();
+    };
+    xhr.ontimeout=function(){
+        clearInterval(prog);
+        aiMessages[aiMessages.length-1].text='15초 타임아웃 — 네트워크 확인';
+        btn.disabled=false;btn.textContent='전송';renderAiMsgs();
+    };
+    xhr.send(body);
 }
 
 function loadLatestImage(){

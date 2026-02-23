@@ -102,12 +102,12 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 </div>
 
 <div class="tabs">
-    <div class="tab active" onclick="showTab('accounts')">계좌</div>
+    <div class="tab" onclick="showTab('accounts')">계좌</div>
     <div class="tab" onclick="showTab('ledger')">가계부</div>
-    <div class="tab" onclick="showTab('settle')">정산</div>
+    <div class="tab active" onclick="showTab('settle')">정산</div>
 </div>
 
-<div class="section active" id="sec-accounts">
+<div class="section" id="sec-accounts">
     <div id="accountList"></div>
 </div>
 
@@ -122,7 +122,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <div id="ledgerContent"></div>
 </div>
 
-<div class="section" id="sec-settle">
+<div class="section active" id="sec-settle">
     <div id="settleSummary"></div>
     <div id="settleContent"></div>
     <div style="margin-top:12px">
@@ -165,7 +165,7 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},currentTab='accounts',ledgerMode='out',logFilterTag='all';
+let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},currentTab='settle',ledgerMode='out',logFilterTag='all';
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){

@@ -20,7 +20,7 @@ object GeminiService {
     private const val FIREBASE_BASE =
         "https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app"
     private const val GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
     private const val BILL_PROMPT = """다음 알림 메시지를 분석하세요. 고지서/청구서/납부안내/결제예정/요금안내인지 판단하세요.
 

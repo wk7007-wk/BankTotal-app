@@ -53,6 +53,26 @@ object GeminiService {
         prefs?.edit()?.putString("gemini_api_key", key)?.apply()
     }
 
+    /** Firebase에서 키 로드 (앱 시작 시 1회, IO 스레드) */
+    fun loadKeyFromFirebase() {
+        if (getApiKey().isNotEmpty()) return
+        try {
+            val conn = URL("$FIREBASE_BASE/banktotal/settings/gemini_key.json")
+                .openConnection() as HttpURLConnection
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            val resp = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            val key = resp.trim().removeSurrounding("\"")
+            if (key.isNotEmpty() && key != "null") {
+                setApiKey(key)
+                Log.d(TAG, "Firebase에서 Gemini 키 로드 완료")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Firebase 키 로드 실패: ${e.message}")
+        }
+    }
+
     /** 알림 텍스트가 고지서 분석 대상인지 (키워드 포함 여부) */
     fun isBillCandidate(text: String): Boolean {
         return BILL_KEYWORDS.any { text.contains(it) }

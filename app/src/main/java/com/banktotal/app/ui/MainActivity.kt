@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         requestPermissions()
         BalanceNotificationHelper.update(this)
         GeminiService.init(this)
+        CoroutineScope(Dispatchers.IO).launch { GeminiService.loadKeyFromFirebase() }
         LogWriter.sys("앱 시작")
     }
 

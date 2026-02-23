@@ -641,7 +641,7 @@ function saveAiKey(val){
 }
 
 function loadAiKey(){
-    // 네이티브 키 우선, 없으면 localStorage
+    // 네이티브 키 우선 → localStorage → Firebase 순
     let k=localStorage.getItem('gemini_api_key')||'';
     if(typeof NativeBridge!=='undefined'){
         try{
@@ -649,6 +649,17 @@ function loadAiKey(){
             if(nk){k=nk;localStorage.setItem('gemini_api_key',k)}
             else if(k){NativeBridge.setGeminiKey(k)}
         }catch(e){}
+    }
+    if(!k){
+        // Firebase에서 로드 (비동기, 다음 호출부터 사용)
+        fetch(FB+'/banktotal/settings/gemini_key.json').then(r=>r.json()).then(d=>{
+            if(d&&typeof d==='string'){
+                localStorage.setItem('gemini_api_key',d);
+                if(typeof NativeBridge!=='undefined')try{NativeBridge.setGeminiKey(d)}catch(e){}
+                const st=document.getElementById('aiKeyStatus');
+                if(st){st.textContent='설정됨';st.style.color='#4caf50'}
+            }
+        }).catch(()=>{});
     }
     return k;
 }
@@ -745,6 +756,7 @@ window.onload=function(){
         initSSE();
     }
     renderPermissions();
+    loadAiKey();
 
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};

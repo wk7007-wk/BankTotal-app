@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.banktotal.app.data.db.BankDatabase
 import com.banktotal.app.service.BalanceNotificationHelper
+import com.banktotal.app.service.GeminiService
 import com.banktotal.app.service.LogWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         requestPermissions()
         BalanceNotificationHelper.update(this)
+        GeminiService.init(this)
         LogWriter.sys("앱 시작")
     }
 
@@ -181,6 +183,12 @@ class MainActivity : AppCompatActivity() {
                 packageManager.getPackageInfo(packageName, 0).versionName ?: ""
             } catch (_: Exception) { "" }
         }
+
+        @JavascriptInterface
+        fun getGeminiKey(): String = GeminiService.getApiKey()
+
+        @JavascriptInterface
+        fun setGeminiKey(key: String) = GeminiService.setApiKey(key)
     }
 
     // --- 권한 ---

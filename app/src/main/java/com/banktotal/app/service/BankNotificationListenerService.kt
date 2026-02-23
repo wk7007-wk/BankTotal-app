@@ -22,12 +22,27 @@ class BankNotificationListenerService : NotificationListenerService() {
         "com.android.mms"
     )
 
+    // 고지서 감지 대상 패키지 (카카오톡 등)
+    private val billPackages = setOf(
+        "com.kakao.talk",
+        "com.samsung.android.messaging",
+        "com.google.android.apps.messaging",
+        "com.android.mms"
+    )
+
+    override fun onCreate() {
+        super.onCreate()
+        GeminiService.init(applicationContext)
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
         val packageName = sbn.packageName ?: return
 
-        // 은행 관련 패키지만 처리 (PosDelay 등 무관한 앱 즉시 무시)
-        if (packageName !in messagingPackages && !shinhanParser.canParse(packageName)) return
+        // 은행 또는 고지서 관련 패키지만 처리
+        val isBankPkg = packageName in messagingPackages || shinhanParser.canParse(packageName)
+        val isBillPkg = packageName in billPackages
+        if (!isBankPkg && !isBillPkg) return
 
         val extras = sbn.notification.extras
         val title = extras.getString("android.title") ?: ""
@@ -35,24 +50,33 @@ class BankNotificationListenerService : NotificationListenerService() {
 
         LogWriter.tx("알림 수신: pkg=$packageName title=$title")
 
-        val parsed: ParsedTransaction?
-
-        if (shinhanParser.canParse(packageName)) {
-            parsed = shinhanParser.parse(title, text)
+        // 1) 은행 거래 파싱 시도
+        val parsed: ParsedTransaction? = if (shinhanParser.canParse(packageName)) {
+            shinhanParser.parse(title, text)
         } else {
-            parsed = parseMessageNotification(title, text)
+            parseMessageNotification(title, text)
         }
 
-        if (parsed == null) {
-            LogWriter.parse("파싱 실패: $text")
+        if (parsed != null) {
+            LogWriter.parse("파싱 성공: ${parsed.bankName} ${parsed.transactionType} ${parsed.transactionAmount}원 잔액${parsed.balance}원")
+            val repository = AccountRepository(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                repository.upsertFromSms(parsed)
+            }
             return
         }
 
-        LogWriter.parse("파싱 성공: ${parsed.bankName} ${parsed.transactionType} ${parsed.transactionAmount}원 잔액${parsed.balance}원")
-
-        val repository = AccountRepository(applicationContext)
-        CoroutineScope(Dispatchers.IO).launch {
-            repository.upsertFromSms(parsed)
+        // 2) 거래 아님 → 고지서 감지 시도 (Gemini API)
+        val content = "$title $text"
+        if (GeminiService.isBillCandidate(content)) {
+            val source = when (packageName) {
+                "com.kakao.talk" -> "카카오톡"
+                else -> "문자"
+            }
+            LogWriter.parse("고지서 후보 감지: $title")
+            CoroutineScope(Dispatchers.IO).launch {
+                GeminiService.detectAndSaveBill(content, source)
+            }
         }
     }
 

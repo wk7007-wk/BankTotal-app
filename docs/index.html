@@ -81,6 +81,19 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .settle-tag.manual{color:#4fc3f7;background:#4fc3f722}
 .settle-tag.auto{color:#ff9800;background:#ff980022}
 .predicted-bal{font-size:11px;color:#888;float:right}
+.ai-chat{background:#1e1e30;border-radius:10px;padding:12px;margin-top:16px}
+.ai-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.ai-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.ai-chip{padding:6px 12px;background:#2a2a40;border:1px solid #333;border-radius:16px;color:#aaa;font-size:12px;cursor:pointer}
+.ai-chip:active{background:#4fc3f722;border-color:#4fc3f7}
+.ai-msgs{max-height:400px;overflow-y:auto;margin:10px 0}
+.ai-msg{padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:13px;line-height:1.6;white-space:pre-wrap}
+.ai-msg.user{background:#4fc3f722;color:#4fc3f7;text-align:right}
+.ai-msg.bot{background:#2a2a40;color:#e0e0e0}
+.ai-input-row{display:flex;gap:6px}
+.ai-input{flex:1;padding:10px;background:#2a2a40;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;outline:none}
+.ai-send{padding:10px 16px;background:#4fc3f7;color:#121212;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer}
+.ai-send:disabled{opacity:.4}
 </style>
 </head>
 <body>
@@ -119,6 +132,29 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="section" id="sec-settle">
     <div id="settleSummary"></div>
     <div id="settleContent"></div>
+    <div class="ai-chat">
+        <div class="ai-header" onclick="toggleAi()">
+            <span style="color:#4fc3f7;font-size:14px;font-weight:bold">AI 재무상담</span>
+            <span id="aiToggle" style="color:#888;font-size:12px">&#9660;</span>
+        </div>
+        <div id="aiBody" style="display:none">
+            <div class="ai-chips">
+                <div class="ai-chip" onclick="askAi('이번 달 지출 분석해줘')">지출 분석</div>
+                <div class="ai-chip" onclick="askAi('예산 계획 세워줘')">예산 계획</div>
+                <div class="ai-chip" onclick="askAi('절약할 수 있는 부분은?')">절약 팁</div>
+                <div class="ai-chip" onclick="askAi('다음 달 예상 잔고는?')">잔고 예측</div>
+            </div>
+            <div class="ai-msgs" id="aiMsgs"></div>
+            <div class="ai-input-row">
+                <input class="ai-input" id="aiInput" placeholder="재무 질문..." onkeydown="if(event.key==='Enter')askAi()">
+                <button class="ai-send" id="aiSendBtn" onclick="askAi()">전송</button>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+                <input id="aiKeyInput" type="password" placeholder="Gemini API Key" style="flex:1;padding:6px 8px;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:#888;font-size:11px;outline:none" onblur="saveAiKey(this.value)">
+                <span id="aiKeyStatus" style="font-size:10px;color:#555">미설정</span>
+            </div>
+        </div>
+    </div>
     <div style="margin-top:16px;display:flex;gap:8px">
         <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:13px;color:#4fc3f7;flex:1">로그</div>
         <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:13px;color:#4fc3f7;flex:1">권한</div>
@@ -575,6 +611,119 @@ function deleteSettle(id){
 function deleteAutoSettle(id){
     if(!confirm('삭제하시겠습니까?'))return;
     fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+}
+
+// --- AI 재무상담 (Gemini API) ---
+let aiMessages=[];
+
+function toggleAi(){
+    const body=document.getElementById('aiBody');
+    const tog=document.getElementById('aiToggle');
+    const open=body.style.display==='none';
+    body.style.display=open?'block':'none';
+    tog.innerHTML=open?'&#9650;':'&#9660;';
+    if(open){
+        const k=loadAiKey();
+        document.getElementById('aiKeyInput').value=k?'••••••••':'';
+        document.getElementById('aiKeyStatus').textContent=k?'설정됨':'미설정';
+        document.getElementById('aiKeyStatus').style.color=k?'#4caf50':'#555';
+    }
+}
+
+function saveAiKey(val){
+    if(val&&val!=='••••••••'){
+        localStorage.setItem('gemini_api_key',val);
+        if(typeof NativeBridge!=='undefined')try{NativeBridge.setGeminiKey(val)}catch(e){}
+        document.getElementById('aiKeyInput').value='••••••••';
+        document.getElementById('aiKeyStatus').textContent='설정됨';
+        document.getElementById('aiKeyStatus').style.color='#4caf50';
+    }
+}
+
+function loadAiKey(){
+    // 네이티브 키 우선, 없으면 localStorage
+    let k=localStorage.getItem('gemini_api_key')||'';
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            const nk=NativeBridge.getGeminiKey();
+            if(nk){k=nk;localStorage.setItem('gemini_api_key',k)}
+            else if(k){NativeBridge.setGeminiKey(k)}
+        }catch(e){}
+    }
+    return k;
+}
+
+function buildFinCtx(){
+    const accs=Object.values(accounts);
+    const totalBal=accs.reduce((s,a)=>s+(a.balance||0),0);
+    let c=`[현재 재무]\n총 잔고: ${totalBal.toLocaleString()}원\n`;
+    accs.forEach(a=>{c+=`- ${a.bank||''} ${a.account||''}: ${(a.balance||0).toLocaleString()}원\n`});
+
+    const now=Date.now();
+    const recent=transactions.filter(t=>t.ts&&now-t.ts<30*86400000&&!t._excluded);
+    const tIn=recent.filter(t=>t.type==='입금').reduce((s,t)=>s+(t.amount||0),0);
+    const tOut=recent.filter(t=>t.type==='출금').reduce((s,t)=>s+(t.amount||0),0);
+    c+=`\n[최근 30일] 입금: ${tIn.toLocaleString()}원, 출금: ${tOut.toLocaleString()}원\n`;
+
+    const cats={};
+    recent.filter(t=>t.type==='출금').forEach(t=>{const n=t.counterparty||'미분류';cats[n]=(cats[n]||0)+(t.amount||0)});
+    if(Object.keys(cats).length){
+        c+='출금 카테고리:\n';
+        Object.entries(cats).sort((a,b)=>b[1]-a[1]).forEach(([n,a])=>{c+=`- ${n}: ${a.toLocaleString()}원\n`});
+    }
+
+    c+='\n최근 거래:\n';
+    recent.slice(0,20).forEach(t=>{
+        const d=new Date(t.ts);
+        c+=`- ${d.getMonth()+1}/${d.getDate()} ${t.type} ${(t.amount||0).toLocaleString()}원 ${t.counterparty||t.bank||''}\n`;
+    });
+
+    if(settleManual.length){
+        c+='\n[정기 항목]\n';
+        settleManual.forEach(m=>{c+=`- ${m.name}: ${m.type} ${(m.amount||0).toLocaleString()}원 (${m.cycle==='weekly'?'매주':'매월'})\n`});
+    }
+    if(settleAuto.length){
+        c+='\n[예정 고지서]\n';
+        settleAuto.forEach(a=>{c+=`- ${a.name||'고지서'}: ${(a.amount||0).toLocaleString()}원\n`});
+    }
+    return c;
+}
+
+async function askAi(q){
+    if(!q){q=(document.getElementById('aiInput').value||'').trim();if(!q)return}
+    const key=loadAiKey();
+    if(!key){alert('Gemini API Key를 입력하세요');return}
+
+    document.getElementById('aiInput').value='';
+    aiMessages.push({role:'user',text:q});
+    aiMessages.push({role:'bot',text:'분석 중...'});
+    renderAiMsgs();
+
+    const btn=document.getElementById('aiSendBtn');
+    btn.disabled=true;btn.textContent='...';
+
+    const ctx=buildFinCtx();
+    const sys=`당신은 개인 재무 상담사입니다. 사용자의 실제 계좌와 거래 내역을 기반으로 예산 설계, 지출 분석, 절약 팁, 잔고 예측 등을 제공합니다.\n\n${ctx}\n\n위 데이터를 기반으로 구체적 숫자를 활용해 분석하세요. 한국어로 간결하게 답변하세요.`;
+
+    try{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]})
+        });
+        const d=await r.json();
+        const reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'응답 없음';
+        aiMessages[aiMessages.length-1].text=reply;
+    }catch(e){
+        aiMessages[aiMessages.length-1].text='오류: '+e.message;
+    }
+    btn.disabled=false;btn.textContent='전송';
+    renderAiMsgs();
+}
+
+function renderAiMsgs(){
+    const el=document.getElementById('aiMsgs');if(!el)return;
+    el.innerHTML=aiMessages.map(m=>`<div class="ai-msg ${m.role}">${m.text.replace(/\n/g,'<br>')}</div>`).join('');
+    el.scrollTop=el.scrollHeight;
 }
 
 // --- 새로고침 ---

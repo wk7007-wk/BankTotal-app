@@ -446,16 +446,19 @@ function renderSettle(){
     const el=document.getElementById('settleContent');
     const currentBalance=Object.values(accounts).reduce((s,a)=>s+(a.balance||0),0);
     const upcoming=generateUpcoming(settleManual,settleAuto,30);
+    // 밀린금액 (날짜 미지정, cycle=none)
+    const pending=getPendingDebts(settleManual,settleAuto);
+    const pendingTotal=pending.reduce((s,p)=>s+(p.type==='출금'?p.amount:-p.amount),0);
     const expectedIn=upcoming.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
     const expectedOut=upcoming.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
     const predicted=currentBalance+expectedIn-expectedOut;
+    const predictedWithDebt=predicted-pendingTotal;
 
     sum.innerHTML=`<div class="summary-row">
         <div class="summary-box"><div class="summary-label">현재</div><div class="summary-val" style="font-size:18px">${fmt(currentBalance)}</div></div>
-        <div class="summary-box"><div class="summary-label">+입금</div><div class="summary-val" style="font-size:18px;color:#4caf50">+${fmt(expectedIn)}</div></div>
-        <div class="summary-box"><div class="summary-label">-출금</div><div class="summary-val" style="font-size:18px;color:#ef5350">-${fmt(expectedOut)}</div></div>
-        <div class="summary-box"><div class="summary-label">30일후</div><div class="summary-val" style="font-size:18px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
-    </div>`;
+        <div class="summary-box"><div class="summary-label">미합산</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">합산</div><div class="summary-val" style="font-size:16px;color:${predictedWithDebt>=0?'#4caf50':'#ef5350'}">${fmt(predictedWithDebt)}</div></div>
+    </div>${pending.length?`<div class="summary-box" style="padding:8px"><div class="summary-label">밀린금액 ${pending.length}건</div><div class="summary-val" style="font-size:16px;color:#ff9800">-${fmt(pendingTotal)}</div></div>`:''}`;
 
     // 30일 건별 예상잔고 리스트
     const upByDate={};
@@ -463,20 +466,34 @@ function renderSettle(){
 
     // 컬럼 헤더
     let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333;margin-top:8px">
-        <span style="min-width:60px;font-size:10px;color:#666">시점</span>
+        <span style="min-width:55px;font-size:10px;color:#666">시점</span>
         <span style="flex:1;font-size:10px;color:#666">내역</span>
-        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">예상입출금</span>
-        <span style="min-width:80px;text-align:right;font-size:10px;color:#666">예상잔고</span>
+        <span style="min-width:65px;text-align:right;font-size:10px;color:#666">금액</span>
+        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">미합산</span>
+        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">합산</span>
     </div>`;
+    // 밀린금액 행들
+    let debtBal=currentBalance-pendingTotal;
+    pending.forEach(p=>{
+        html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#ff980011">
+            <span style="min-width:55px;font-size:11px;color:#ff9800">밀림</span>
+            <span style="flex:1;font-size:12px;color:#ff9800">${p.name}</span>
+            <span style="min-width:65px;text-align:right;font-size:12px;color:#ef5350">-${fmt(p.amount)}</span>
+            <span style="min-width:70px"></span>
+            <span style="min-width:70px"></span>
+        </div>`;
+    });
     // 현재잔고 행
     html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">
-        <span style="min-width:60px;font-size:12px;color:#4fc3f7">현재</span>
-        <span style="flex:1;font-size:12px;color:#aaa">합산잔고</span>
-        <span style="min-width:70px"></span>
-        <span style="min-width:80px;text-align:right;font-size:13px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
+        <span style="min-width:55px;font-size:12px;color:#4fc3f7">현재</span>
+        <span style="flex:1;font-size:12px;color:#aaa">잔고</span>
+        <span style="min-width:65px"></span>
+        <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
+        <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:${debtBal>=0?'#4caf50':'#ef5350'}">${fmt(debtBal)}</span>
     </div>`;
 
     let bal=currentBalance;
+    let balDebt=currentBalance-pendingTotal;
     const now=new Date();now.setHours(0,0,0,0);
     const dayNames=['일','월','화','수','목','금','토'];
     for(let i=0;i<30;i++){
@@ -489,24 +506,27 @@ function renderSettle(){
         if(items.length){
             items.forEach((u,j)=>{
                 const isIn=u.type==='입금';
-                bal+=isIn?u.amount:-u.amount;
+                const delta=isIn?u.amount:-u.amount;
+                bal+=delta;balDebt+=delta;
                 const bg=isToday?'background:#4fc3f711;':'';
                 const amtColor=isIn?'#4caf50':'#ef5350';
                 const dateLabel=j===0?`${dk}(${dayName})`:'';
                 html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
-                    <span style="min-width:60px;font-size:12px;color:${dayColor}">${dateLabel}</span>
+                    <span style="min-width:55px;font-size:11px;color:${dayColor}">${dateLabel}</span>
                     <span style="flex:1;font-size:12px;color:${u.overdue?'#ff9800':'#aaa'}">${u.name}${u.overdue?' (지연)':''}</span>
-                    <span style="min-width:70px;text-align:right;font-size:12px;color:${amtColor}">${isIn?'+':'-'}${fmt(u.amount)}</span>
-                    <span style="min-width:80px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
+                    <span style="min-width:65px;text-align:right;font-size:12px;color:${amtColor}">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
+                    <span style="min-width:70px;text-align:right;font-size:12px;color:${balDebt>=0?'#4caf50':'#ef5350'}">${fmt(balDebt)}</span>
                 </div>`;
             });
         }else{
             const bg=isToday?'background:#4fc3f711;':'';
             html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
-                <span style="min-width:60px;font-size:12px;color:${dayColor}">${dk}(${dayName})</span>
+                <span style="min-width:55px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
                 <span style="flex:1"></span>
-                <span style="min-width:70px"></span>
-                <span style="min-width:80px;text-align:right;font-size:13px;color:#555">${fmt(bal)}</span>
+                <span style="min-width:65px"></span>
+                <span style="min-width:70px;text-align:right;font-size:12px;color:#555">${fmt(bal)}</span>
+                <span style="min-width:70px;text-align:right;font-size:12px;color:#444">${fmt(balDebt)}</span>
             </div>`;
         }
     }
@@ -519,6 +539,7 @@ function generateUpcoming(manual,auto,days){
     const now=new Date();now.setHours(0,0,0,0);
     const end=new Date(now.getTime()+days*86400000);
     manual.forEach(m=>{
+        if(m.cycle==='none')return; // 밀린금액은 별도 처리
         for(let i=0;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;
@@ -529,6 +550,7 @@ function generateUpcoming(manual,auto,days){
         }
     });
     auto.forEach(a=>{
+        if(a.cycle==='none')return; // 밀린금액은 별도 처리
         if(!a.dueDate&&!a.amount)return;
         const due=a.dueDate||now.getTime();
         const tp=a.type||'출금';
@@ -541,6 +563,17 @@ function generateUpcoming(manual,auto,days){
         }
     });
     return result.sort((a,b)=>a.date-b.date);
+}
+
+function getPendingDebts(manual,auto){
+    const result=[];
+    manual.forEach(m=>{
+        if(m.cycle==='none')result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',source:'manual',_id:m._id});
+    });
+    auto.forEach(a=>{
+        if(a.cycle==='none')result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',source:'auto',_id:a._id});
+    });
+    return result;
 }
 
 function deleteSettle(id){
@@ -624,7 +657,10 @@ function buildFinCtx(){
 
     if(settleManual.length){
         c+='\n[정기 항목]\n';
-        settleManual.forEach(m=>{c+=`- ${m.name}: ${m.type} ${(m.amount||0).toLocaleString()}원 (${m.cycle==='weekly'?'매주':'매월'})\n`});
+        settleManual.forEach(m=>{
+            const cycleLabel=m.cycle==='none'?'밀린금액':m.cycle==='daily'?'매일':m.cycle==='weekly'?'매주':'매월';
+            c+=`- ${m.name}: ${m.type} ${(m.amount||0).toLocaleString()}원 (${cycleLabel})\n`;
+        });
     }
     if(settleAuto.length){
         c+='\n[예정 고지서]\n';
@@ -655,9 +691,10 @@ ${ctx}
 
 [중요] 사용자가 정기 항목이나 규칙 등록/삭제를 요청하면, 답변 맨 끝에 액션 태그를 추가하세요:
 
-정기항목 등록: [ACTION]{"act":"add","name":"항목명","amount":금액숫자,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]
-- cycle: daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31)
+정기항목 등록: [ACTION]{"act":"add","name":"항목명","amount":금액숫자,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]
+- cycle: daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31), none=날짜미정(밀린금액/미정채무)
 - 130만원→1300000, 50만원→500000 등 반드시 숫자로 변환
+- 밀린금액이나 날짜가 미정인 채무는 cycle:"none"으로 등록
 정기항목 삭제: [ACTION]{"act":"del","name":"항목명"}[/ACTION]
 규칙 추가: [ACTION]{"act":"add_rule","rule":"새 규칙 내용"}[/ACTION]
 규칙 삭제: [ACTION]{"act":"del_rule","rule":"삭제할 규칙 내용"}[/ACTION]
@@ -718,7 +755,7 @@ async function analyzeBase64(base64,mime){
 ${ctx}
 
 [액션 형식]
-등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]`;
+등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]`;
 
     try{
         const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key='+key,{
@@ -768,7 +805,7 @@ async function analyzeImage(input){
 ${ctx}
 
 [액션 형식]
-등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]
+등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]
 
 분석 결과를 간결하게 요약하고, 등록 가능한 항목이 있으면 액션 태그를 추가하세요.`;
 
@@ -803,6 +840,7 @@ async function executeAiAction(act){
         const entry={name:act.name||'항목',amount:act.amount||0,type:act.txType||'입금',cycle:act.cycle||'daily',ts:Date.now()};
         if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
         else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
+        // cycle:"none" → 날짜 미지정 밀린금액 (dayOfWeek/dayOfMonth 불필요)
         const id='sm_'+Date.now();
         await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)});
     }else if(act.act==='del'){

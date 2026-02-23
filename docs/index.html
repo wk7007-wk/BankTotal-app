@@ -441,11 +441,11 @@ function renderPermissions(){
 }
 
 // --- 정산 렌더링 ---
-// 정산 시뮬레이션 상태 (_id → {ex:제외여부, off:날짜이동})
-let settleState={};
-function sst(id){if(!settleState[id])settleState[id]={ex:false,off:0};return settleState[id]}
-function toggleSettle(id){sst(id).ex=!sst(id).ex;renderSettle()}
-function moveSettle(id,delta){const s=sst(id);s.off=Math.max(-15,Math.min(29,s.off+delta));renderSettle()}
+// 정산 시뮬레이션 — 개별 항목 상태 (_key → {ex, sh})
+let itemState={};
+function ist(k){if(!itemState[k])itemState[k]={ex:false,sh:0};return itemState[k]}
+function toggleItem(k){ist(k).ex=!ist(k).ex;renderSettle()}
+function moveItem(k,delta){ist(k).sh+=delta;renderSettle()}
 
 function renderSettle(){
     const sum=document.getElementById('settleSummary');
@@ -454,69 +454,35 @@ function renderSettle(){
     const now=new Date();now.setHours(0,0,0,0);
     const dayNames=['일','월','화','수','목','금','토'];
 
-    // 모든 항목 생성 (상태 반영)
     const items=generateAllItems(settleManual,settleAuto,30);
     const included=items.filter(u=>!u.excluded);
     const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
     const expectedOut=included.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
     const predicted=currentBalance+expectedIn-expectedOut;
+    const exCnt=items.filter(u=>u.excluded).length;
 
-    // 소스 목록 (컨트롤 패널용)
-    const sources=[];
-    settleManual.forEach(m=>sources.push({name:m.name,amount:m.amount||0,type:m.type||'출금',cycle:m.cycle||'daily',_id:m._id,dayOfWeek:m.dayOfWeek,dayOfMonth:m.dayOfMonth}));
-    settleAuto.forEach(a=>sources.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:a.type||'출금',cycle:a.cycle,_id:a._id,dueDate:a.dueDate}));
-    const exCnt=sources.filter(s=>sst(s._id).ex).length;
-
-    // 요약 헤더
     sum.innerHTML=`<div class="summary-row">
         <div class="summary-box"><div class="summary-label">현재</div><div class="summary-val" style="font-size:18px">${fmt(currentBalance)}</div></div>
         <div class="summary-box"><div class="summary-label">예상 30일</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
-    </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중 (터치로 복원)</div>`:''}`;
+    </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
 
-    // 컨트롤 패널 — 모든 항목 ◀▶ + 터치 토글
-    let html='';
-    if(sources.length){
-        html+=`<div style="background:#1e1e30;border-radius:10px;padding:8px;margin-bottom:8px">
-            <div style="font-size:11px;color:#666;margin-bottom:4px">항목 관리 · 터치=포함/제외 · ◀▶=날짜이동</div>`;
-        sources.forEach(s=>{
-            const st=sst(s._id);
-            const off=st.off;
-            const amtColor=s.type==='입금'?'#4caf50':'#ef5350';
-            const sign=s.type==='입금'?'+':'-';
-            const opacity=st.ex?'opacity:.35;':'';
-            // 날짜 라벨
-            let dateLabel;
-            if(s.cycle==='daily'){dateLabel='매일'}
-            else if(s.cycle==='weekly'){const dow=((s.dayOfWeek||0)+off%7+7)%7;dateLabel=`매주${dayNames[dow]}`}
-            else if(s.cycle==='monthly'){const dom=Math.max(1,Math.min(28,(s.dayOfMonth||1)+off));dateLabel=`매월${dom}일`}
-            else{const dd=new Date(now.getTime()+Math.max(0,off)*86400000);dateLabel=off===0?'오늘':`${dd.getMonth()+1}/${dd.getDate()}(${dayNames[dd.getDay()]})`}
-            html+=`<div onclick="toggleSettle('${s._id}')" style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #2a2a40;cursor:pointer;${opacity}">
-                <span style="flex:1;font-size:12px;color:#ccc;${st.ex?'text-decoration:line-through;':''}">${s.name} <span style="color:${amtColor}">${sign}${fmt(s.amount)}</span></span>
-                <span onclick="event.stopPropagation();moveSettle('${s._id}',-1)" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:5px;color:#aaa;font-size:11px;cursor:pointer;margin:0 2px">◀</span>
-                <span style="min-width:60px;text-align:center;font-size:10px;color:${off===0?'#888':'#ff9800'}">${dateLabel}</span>
-                <span onclick="event.stopPropagation();moveSettle('${s._id}',1)" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:5px;color:#aaa;font-size:11px;cursor:pointer;margin:0 2px">▶</span>
-            </div>`;
-        });
-        html+=`</div>`;
-    }
-
-    // 30일 건별 예상잔고 리스트
     const upByDate={};
     items.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
 
-    html+=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
-        <span style="min-width:55px;font-size:10px;color:#666">시점</span>
+    let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
+        <span style="min-width:50px;font-size:10px;color:#666">시점</span>
         <span style="flex:1;font-size:10px;color:#666">내역</span>
-        <span style="min-width:60px;text-align:right;font-size:10px;color:#666">금액</span>
-        <span style="min-width:75px;text-align:right;font-size:10px;color:#666">예상잔고</span>
+        <span style="min-width:55px;text-align:right;font-size:10px;color:#666">금액</span>
+        <span style="min-width:36px"></span>
+        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">예상잔고</span>
     </div>`;
 
-    // 현재잔고 행
     html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">
-        <span style="min-width:55px;font-size:12px;color:#4fc3f7">현재</span>
+        <span style="min-width:50px;font-size:12px;color:#4fc3f7">현재</span>
         <span style="flex:1;font-size:12px;color:#aaa">잔고</span>
-        <span style="min-width:60px"></span>
-        <span style="min-width:75px;text-align:right;font-size:14px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
+        <span style="min-width:55px"></span>
+        <span style="min-width:36px"></span>
+        <span style="min-width:70px;text-align:right;font-size:14px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
     </div>`;
 
     let bal=currentBalance;
@@ -532,27 +498,32 @@ function renderSettle(){
                 const isIn=u.type==='입금';
                 const delta=isIn?u.amount:-u.amount;
                 if(!u.excluded)bal+=delta;
-                const opacity=u.excluded?'opacity:.35;':'';
+                const op=u.excluded?'opacity:.35;':'';
                 const bg=u.excluded?'':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'';
-                const amtColor=isIn?'#4caf50':'#ef5350';
-                const nameColor=u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
-                const dateLabel=j===0?`${dk}(${dayName})`:'';
+                const amtC=isIn?'#4caf50':'#ef5350';
+                const nmC=u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
+                const dl=j===0?`${dk}(${dayName})`:'';
                 const tag=u.isPending?' ⚡':'';
-                const strike=u.excluded?'text-decoration:line-through;':'';
-                html+=`<div onclick="toggleSettle('${u._id}')" style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;cursor:pointer;${bg}${opacity}">
-                    <span style="min-width:55px;font-size:11px;color:${dayColor}">${dateLabel}</span>
-                    <span style="flex:1;font-size:12px;color:${nameColor}">${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span style="min-width:60px;text-align:right;font-size:12px;color:${amtColor};${strike}">${isIn?'+':'-'}${fmt(u.amount)}</span>
-                    <span style="min-width:75px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
+                const stk=u.excluded?'text-decoration:line-through;':'';
+                html+=`<div style="display:flex;align-items:center;padding:5px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}">
+                    <span style="min-width:50px;font-size:11px;color:${dayColor}">${dl}</span>
+                    <span onclick="toggleItem('${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer">${u.name}${u.overdue?' (지연)':''}${tag}</span>
+                    <span style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk}">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span style="min-width:36px;display:flex;gap:1px;justify-content:center">
+                        <span onclick="moveItem('${u._key}',-1)" style="width:17px;height:20px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:3px;color:#888;font-size:9px;cursor:pointer">◀</span>
+                        <span onclick="moveItem('${u._key}',1)" style="width:17px;height:20px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:3px;color:#888;font-size:9px;cursor:pointer">▶</span>
+                    </span>
+                    <span style="min-width:70px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
                 </div>`;
             });
         }else{
             const bg=isToday?'background:#4fc3f711;':'';
-            html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
-                <span style="min-width:55px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
+            html+=`<div style="display:flex;align-items:center;padding:5px 4px;border-bottom:1px solid #1a1a1a;${bg}">
+                <span style="min-width:50px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
                 <span style="flex:1"></span>
-                <span style="min-width:60px"></span>
-                <span style="min-width:75px;text-align:right;font-size:13px;color:#555">${fmt(bal)}</span>
+                <span style="min-width:55px"></span>
+                <span style="min-width:36px"></span>
+                <span style="min-width:70px;text-align:right;font-size:13px;color:#555">${fmt(bal)}</span>
             </div>`;
         }
     }
@@ -564,34 +535,49 @@ function generateAllItems(manual,auto,days){
     const now=new Date();now.setHours(0,0,0,0);
     const end=new Date(now.getTime()+days*86400000);
     manual.forEach(m=>{
-        const st=sst(m._id);
         if(m.cycle==='none'){
-            const d=new Date(now.getTime()+Math.max(0,st.off)*86400000);
-            result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),cycle:'none',source:'manual',_id:m._id,isPending:true,excluded:st.ex});
+            const key=m._id;
+            const st=ist(key);
+            const day=Math.max(0,Math.min(29,st.sh));
+            const d=new Date(now.getTime()+day*86400000);
+            result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,isPending:true,excluded:st.ex});
             return;
         }
         for(let i=0;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;
             if(m.cycle==='daily')match=true;
-            if(m.cycle==='monthly'){const dom=Math.max(1,Math.min(28,(m.dayOfMonth||1)+st.off));match=d.getDate()===dom}
-            if(m.cycle==='weekly'){const dow=((m.dayOfWeek||0)+st.off%7+7)%7;match=d.getDay()===dow}
-            if(match)result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),cycle:m.cycle,source:'manual',_id:m._id,excluded:st.ex});
+            if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
+            if(m.cycle==='weekly'&&d.getDay()===(m.dayOfWeek||0))match=true;
+            if(match){
+                const key=m._id+'_'+i;
+                const st=ist(key);
+                const newDay=Math.max(0,Math.min(29,i+st.sh));
+                const nd=new Date(now.getTime()+newDay*86400000);
+                result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,excluded:st.ex});
+            }
         }
     });
     auto.forEach(a=>{
-        const st=sst(a._id);
         if(a.cycle==='none'){
-            const d=new Date(now.getTime()+Math.max(0,st.off)*86400000);
-            result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),source:'auto',_id:a._id,isPending:true,excluded:st.ex});
+            const key=a._id;
+            const st=ist(key);
+            const day=Math.max(0,Math.min(29,st.sh));
+            const d=new Date(now.getTime()+day*86400000);
+            result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),_key:key,_id:a._id,isPending:true,excluded:st.ex});
             return;
         }
         if(!a.dueDate&&!a.amount)return;
-        const due=(a.dueDate||now.getTime())+st.off*86400000;
+        const due=a.dueDate||now.getTime();
         const tp=a.type||'출금';
         const showDate=(tp==='출금'&&due<now.getTime())?now.getTime():due;
         if(showDate<=end.getTime()){
-            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:showDate,source:'auto',_id:a._id,overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
+            const origDay=Math.round((showDate-now.getTime())/86400000);
+            const key=a._id;
+            const st=ist(key);
+            const newDay=Math.max(0,Math.min(29,origDay+st.sh));
+            const nd=new Date(now.getTime()+newDay*86400000);
+            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:nd.getTime(),_key:key,_id:a._id,overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
         }
     });
     return result.sort((a,b)=>a.date-b.date);

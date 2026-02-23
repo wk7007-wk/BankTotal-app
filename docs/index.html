@@ -441,12 +441,19 @@ function renderPermissions(){
 }
 
 // --- 정산 렌더링 ---
+// 밀린금액 날짜 배치 상태 (id → dayOffset, 0=오늘)
+let pendingDateMap={};
+function movePending(id,delta){
+    const cur=pendingDateMap[id]||0;
+    pendingDateMap[id]=Math.max(0,Math.min(29,cur+delta));
+    renderSettle();
+}
+
 function renderSettle(){
     const sum=document.getElementById('settleSummary');
     const el=document.getElementById('settleContent');
     const currentBalance=Object.values(accounts).reduce((s,a)=>s+(a.balance||0),0);
     const upcoming=generateUpcoming(settleManual,settleAuto,30);
-    // 밀린금액 (날짜 미지정, cycle=none)
     const pending=getPendingDebts(settleManual,settleAuto);
     const pendingTotal=pending.reduce((s,p)=>s+(p.type==='출금'?p.amount:-p.amount),0);
     const expectedIn=upcoming.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
@@ -454,69 +461,100 @@ function renderSettle(){
     const predicted=currentBalance+expectedIn-expectedOut;
     const predictedWithDebt=predicted-pendingTotal;
 
+    const now=new Date();now.setHours(0,0,0,0);
+    const dayNames=['일','월','화','수','목','금','토'];
+
+    // 밀린금액 → 날짜별 배치 맵
+    const pendingByDay={};
+    pending.forEach(p=>{
+        const day=pendingDateMap[p._id]||0;
+        if(!pendingByDay[day])pendingByDay[day]=[];
+        pendingByDay[day].push(p);
+    });
+
+    // 요약 헤더
     sum.innerHTML=`<div class="summary-row">
         <div class="summary-box"><div class="summary-label">현재</div><div class="summary-val" style="font-size:18px">${fmt(currentBalance)}</div></div>
-        <div class="summary-box"><div class="summary-label">미합산</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
-        <div class="summary-box"><div class="summary-label">합산</div><div class="summary-val" style="font-size:16px;color:${predictedWithDebt>=0?'#4caf50':'#ef5350'}">${fmt(predictedWithDebt)}</div></div>
-    </div>${pending.length?`<div class="summary-box" style="padding:8px"><div class="summary-label">밀린금액 ${pending.length}건</div><div class="summary-val" style="font-size:16px;color:#ff9800">-${fmt(pendingTotal)}</div></div>`:''}`;
+        <div class="summary-box"><div class="summary-label">예상</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">+밀림</div><div class="summary-val" style="font-size:16px;color:${predictedWithDebt>=0?'#4caf50':'#ef5350'}">${fmt(predictedWithDebt)}</div></div>
+    </div>`;
+
+    // 밀린금액 컨트롤 패널
+    let html='';
+    if(pending.length){
+        html+=`<div style="background:#1e1e30;border-radius:10px;padding:10px;margin-bottom:8px">
+            <div style="font-size:12px;color:#ff9800;margin-bottom:6px">밀린금액 ${pending.length}건 · -${fmt(pendingTotal)} <span style="font-size:10px;color:#666">◀▶ 날짜 이동</span></div>`;
+        pending.forEach(p=>{
+            const day=pendingDateMap[p._id]||0;
+            const d=new Date(now.getTime()+day*86400000);
+            const dk=(d.getMonth()+1)+'/'+(d.getDate());
+            const dn=dayNames[d.getDay()];
+            const label=day===0?'오늘':`+${day}일 ${dk}(${dn})`;
+            html+=`<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #2a2a40">
+                <span style="flex:1;font-size:13px;color:#ff9800">${p.name} <span style="color:#ef5350">-${fmt(p.amount)}</span></span>
+                <span onclick="movePending('${p._id}',-1)" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:6px;color:#aaa;font-size:14px;cursor:pointer;margin:0 3px">◀</span>
+                <span style="min-width:80px;text-align:center;font-size:11px;color:${day===0?'#4fc3f7':'#ff9800'}">${label}</span>
+                <span onclick="movePending('${p._id}',1)" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#333;border-radius:6px;color:#aaa;font-size:14px;cursor:pointer;margin:0 3px">▶</span>
+            </div>`;
+        });
+        html+=`</div>`;
+    }
 
     // 30일 건별 예상잔고 리스트
     const upByDate={};
     upcoming.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
 
     // 컬럼 헤더
-    let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333;margin-top:8px">
+    html+=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
         <span style="min-width:55px;font-size:10px;color:#666">시점</span>
         <span style="flex:1;font-size:10px;color:#666">내역</span>
-        <span style="min-width:65px;text-align:right;font-size:10px;color:#666">금액</span>
-        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">미합산</span>
-        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">합산</span>
+        <span style="min-width:60px;text-align:right;font-size:10px;color:#666">금액</span>
+        <span style="min-width:65px;text-align:right;font-size:10px;color:#666">예상</span>
+        <span style="min-width:65px;text-align:right;font-size:10px;color:#666">+밀림</span>
     </div>`;
-    // 밀린금액 행들
-    let debtBal=currentBalance-pendingTotal;
-    pending.forEach(p=>{
-        html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#ff980011">
-            <span style="min-width:55px;font-size:11px;color:#ff9800">밀림</span>
-            <span style="flex:1;font-size:12px;color:#ff9800">${p.name}</span>
-            <span style="min-width:65px;text-align:right;font-size:12px;color:#ef5350">-${fmt(p.amount)}</span>
-            <span style="min-width:70px"></span>
-            <span style="min-width:70px"></span>
-        </div>`;
-    });
+
     // 현재잔고 행
     html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">
         <span style="min-width:55px;font-size:12px;color:#4fc3f7">현재</span>
         <span style="flex:1;font-size:12px;color:#aaa">잔고</span>
-        <span style="min-width:65px"></span>
-        <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
-        <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:${debtBal>=0?'#4caf50':'#ef5350'}">${fmt(debtBal)}</span>
+        <span style="min-width:60px"></span>
+        <span style="min-width:65px;text-align:right;font-size:13px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
+        <span style="min-width:65px;text-align:right;font-size:13px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
     </div>`;
 
     let bal=currentBalance;
-    let balDebt=currentBalance-pendingTotal;
-    const now=new Date();now.setHours(0,0,0,0);
-    const dayNames=['일','월','화','수','목','금','토'];
+    let balDebt=currentBalance;
     for(let i=0;i<30;i++){
         const d=new Date(now.getTime()+i*86400000);
         const dk=dateFmt(d.getTime());
         const dayName=dayNames[d.getDay()];
         const items=upByDate[dk]||[];
+        const debtItems=pendingByDay[i]||[];
+        const allItems=[...items];
+        // 밀린금액을 해당 날짜에 삽입
+        debtItems.forEach(p=>{
+            allItems.push({name:p.name,amount:p.amount,type:p.type||'출금',isPending:true,_id:p._id});
+        });
         const isToday=i===0;
         const dayColor=d.getDay()===0?'#ef5350':d.getDay()===6?'#4fc3f7':'#888';
-        if(items.length){
-            items.forEach((u,j)=>{
+
+        if(allItems.length){
+            allItems.forEach((u,j)=>{
                 const isIn=u.type==='입금';
                 const delta=isIn?u.amount:-u.amount;
-                bal+=delta;balDebt+=delta;
-                const bg=isToday?'background:#4fc3f711;':'';
+                bal+=u.isPending?0:delta; // 예상잔고: 밀림 미반영
+                balDebt+=delta; // +밀림: 밀림 반영
+                const bg=u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'';
                 const amtColor=isIn?'#4caf50':'#ef5350';
+                const nameColor=u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
                 const dateLabel=j===0?`${dk}(${dayName})`:'';
+                const tag=u.isPending?' ⚡':'';
                 html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
                     <span style="min-width:55px;font-size:11px;color:${dayColor}">${dateLabel}</span>
-                    <span style="flex:1;font-size:12px;color:${u.overdue?'#ff9800':'#aaa'}">${u.name}${u.overdue?' (지연)':''}</span>
-                    <span style="min-width:65px;text-align:right;font-size:12px;color:${amtColor}">${isIn?'+':'-'}${fmt(u.amount)}</span>
-                    <span style="min-width:70px;text-align:right;font-size:12px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
-                    <span style="min-width:70px;text-align:right;font-size:12px;color:${balDebt>=0?'#4caf50':'#ef5350'}">${fmt(balDebt)}</span>
+                    <span style="flex:1;font-size:12px;color:${nameColor}">${u.name}${u.overdue?' (지연)':''}${tag}</span>
+                    <span style="min-width:60px;text-align:right;font-size:12px;color:${amtColor}">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span style="min-width:65px;text-align:right;font-size:12px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
+                    <span style="min-width:65px;text-align:right;font-size:12px;color:${balDebt>=0?'#4caf50':'#ef5350'}">${fmt(balDebt)}</span>
                 </div>`;
             });
         }else{
@@ -524,9 +562,9 @@ function renderSettle(){
             html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
                 <span style="min-width:55px;font-size:11px;color:${dayColor}">${dk}(${dayName})</span>
                 <span style="flex:1"></span>
-                <span style="min-width:65px"></span>
-                <span style="min-width:70px;text-align:right;font-size:12px;color:#555">${fmt(bal)}</span>
-                <span style="min-width:70px;text-align:right;font-size:12px;color:#444">${fmt(balDebt)}</span>
+                <span style="min-width:60px"></span>
+                <span style="min-width:65px;text-align:right;font-size:12px;color:#555">${fmt(bal)}</span>
+                <span style="min-width:65px;text-align:right;font-size:12px;color:#444">${fmt(balDebt)}</span>
             </div>`;
         }
     }

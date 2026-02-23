@@ -495,7 +495,7 @@ function renderSettle(){
                 const dateLabel=j===0?`${dk}(${dayName})`:'';
                 html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
                     <span style="min-width:60px;font-size:12px;color:${dayColor}">${dateLabel}</span>
-                    <span style="flex:1;font-size:12px;color:#aaa">${u.name}</span>
+                    <span style="flex:1;font-size:12px;color:${u.overdue?'#ff9800':'#aaa'}">${u.name}${u.overdue?' (지연)':''}</span>
                     <span style="min-width:70px;text-align:right;font-size:12px;color:${amtColor}">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:80px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
                 </div>`;
@@ -529,8 +529,15 @@ function generateUpcoming(manual,auto,days){
         }
     });
     auto.forEach(a=>{
-        if(a.dueDate&&a.dueDate>=now.getTime()&&a.dueDate<=end.getTime()){
-            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:a.type||'출금',date:a.dueDate,source:'auto',_id:a._id});
+        if(!a.dueDate&&!a.amount)return;
+        const due=a.dueDate||now.getTime();
+        const tp=a.type||'출금';
+        if(due<=end.getTime()){
+            // 출금: 날짜 지났어도 오늘로 이월 (미완료 간주)
+            const showDate=(tp==='출금'&&due<now.getTime())?now.getTime():due;
+            if(showDate<=end.getTime()){
+                result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:showDate,source:'auto',_id:a._id,overdue:due<now.getTime()});
+            }
         }
     });
     return result.sort((a,b)=>a.date-b.date);

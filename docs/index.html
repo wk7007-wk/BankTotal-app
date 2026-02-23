@@ -75,8 +75,6 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .empty{text-align:center;color:#555;padding:40px 0;font-size:14px}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .version{text-align:center;color:#444;font-size:11px;padding:20px 0}
-.settle-form input,.settle-form select{width:100%;padding:8px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#e0e0e0;margin-bottom:6px;font-size:14px}
-.settle-form select{appearance:auto}
 .settle-tag{font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px}
 .settle-tag.manual{color:#4fc3f7;background:#4fc3f722}
 .settle-tag.auto{color:#ff9800;background:#ff980022}
@@ -470,16 +468,14 @@ function renderSettle(){
     const expectedOut=upcoming.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
     const predicted=currentBalance+expectedIn-expectedOut;
 
-    sum.innerHTML=`
-        <div class="summary-box"><div class="summary-label">현재 잔고</div><div class="summary-val">${fmt(currentBalance)}</div></div>
-        <div class="summary-row">
-            <div class="summary-box"><div class="summary-label">예상 입금</div><div class="summary-val" style="color:#4caf50">+${fmt(expectedIn)}</div></div>
-            <div class="summary-box"><div class="summary-label">예상 출금</div><div class="summary-val" style="color:#ef5350">-${fmt(expectedOut)}</div></div>
-        </div>
-        <div class="summary-box"><div class="summary-label">예상 잔고 (30일)</div><div class="summary-val" style="color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>`;
+    sum.innerHTML=`<div class="summary-row">
+        <div class="summary-box"><div class="summary-label">현재</div><div class="summary-val" style="font-size:18px">${fmt(currentBalance)}</div></div>
+        <div class="summary-box"><div class="summary-label">+입금</div><div class="summary-val" style="font-size:18px;color:#4caf50">+${fmt(expectedIn)}</div></div>
+        <div class="summary-box"><div class="summary-label">-출금</div><div class="summary-val" style="font-size:18px;color:#ef5350">-${fmt(expectedOut)}</div></div>
+        <div class="summary-box"><div class="summary-label">30일후</div><div class="summary-val" style="font-size:18px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
+    </div>`;
 
-    let html='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px"><span style="color:#888;font-size:13px">예정 내역 (30일)</span><button onclick="showSettleForm()" style="background:#4fc3f7;color:#121212;border:none;padding:6px 14px;border-radius:16px;font-size:12px;cursor:pointer">+ 수동 추가</button></div>';
-    html+='<div id="settleFormBox" style="display:none"></div>';
+    let html='<div style="margin:12px 0 8px;color:#888;font-size:13px">예정 내역 (30일)</div>';
 
     if(!upcoming.length){
         html+='<div class="empty">예정 내역 없음</div>';
@@ -505,35 +501,6 @@ function renderSettle(){
         }
     }
 
-    // 등록된 수동 항목 목록
-    html+='<div style="margin-top:16px;color:#888;font-size:12px;border-top:1px solid #333;padding-top:12px">등록된 정기 항목</div>';
-    if(!settleManual.length){
-        html+='<div class="empty" style="padding:20px 0">등록된 항목 없음</div>';
-    }else{
-        const dayNames=['일','월','화','수','목','금','토'];
-        settleManual.forEach(m=>{
-            const cycleTxt=m.cycle==='daily'?'매일':m.cycle==='weekly'?`매주 ${dayNames[m.dayOfWeek||0]}요일`:`매월 ${m.dayOfMonth||1}일`;
-            const isIn=m.type==='입금';
-            html+=`<div class="tx-item">
-                <div class="tx-left"><span class="tx-cp">${m.name}</span><span class="tx-time">${cycleTxt}</span></div>
-                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(m.amount)}</div><div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteSettle('${m._id}')">삭제</span></div></div>
-            </div>`;
-        });
-    }
-
-    // 자동 감지 항목
-    if(settleAuto.length){
-        html+='<div style="margin-top:12px;color:#888;font-size:12px;border-top:1px solid #333;padding-top:12px">자동 감지 고지서</div>';
-        settleAuto.forEach(a=>{
-            const isIn=a.type==='입금';
-            const due=a.dueDate?dateFmt(a.dueDate):'미정';
-            html+=`<div class="tx-item">
-                <div class="tx-left"><span class="tx-cp">${a.name||'고지서'} <span class="settle-tag auto">자동</span></span><span class="tx-time">납기 ${due} · ${a.source||''}</span></div>
-                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(a.amount)}</div><div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteAutoSettle('${a._id}')">삭제</span></div></div>
-            </div>`;
-        });
-    }
-
     el.innerHTML=html;
 }
 
@@ -557,54 +524,6 @@ function generateUpcoming(manual,auto,days){
         }
     });
     return result.sort((a,b)=>a.date-b.date);
-}
-
-function showSettleForm(){
-    const box=document.getElementById('settleFormBox');
-    if(!box)return;
-    box.style.display='block';
-    const dayOpts=Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}일</option>`).join('');
-    box.innerHTML=`<div class="card settle-form" style="margin-bottom:12px">
-        <div style="font-size:14px;color:#4fc3f7;margin-bottom:10px">수동 항목 추가</div>
-        <input id="sf-name" placeholder="항목명 (예: 배달정산)">
-        <input id="sf-amount" type="number" placeholder="금액" inputmode="numeric">
-        <div style="display:flex;gap:6px">
-            <select id="sf-type"><option value="입금">입금</option><option value="출금">출금</option></select>
-            <select id="sf-cycle" onchange="updateCycleDay()"><option value="daily">매일</option><option value="monthly">매월</option><option value="weekly">매주</option></select>
-        </div>
-        <div id="sf-day-wrap"><select id="sf-day">${dayOpts}</select></div>
-        <div style="display:flex;gap:6px;margin-top:2px">
-            <button onclick="saveSettle()" style="flex:1;padding:10px;background:#4fc3f7;color:#121212;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">저장</button>
-            <button onclick="document.getElementById('settleFormBox').style.display='none'" style="flex:1;padding:10px;background:#333;color:#aaa;border:none;border-radius:8px;font-size:14px;cursor:pointer">취소</button>
-        </div>
-    </div>`;
-}
-
-function updateCycleDay(){
-    const cycle=document.getElementById('sf-cycle').value;
-    const wrap=document.getElementById('sf-day-wrap');
-    if(cycle==='daily'){
-        wrap.innerHTML='<span style="color:#666;font-size:12px">매일 반복</span>';
-    }else if(cycle==='weekly'){
-        wrap.innerHTML='<select id="sf-day"><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option><option value="0">일요일</option></select>';
-    }else{
-        wrap.innerHTML='<select id="sf-day">'+Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}일</option>`).join('')+'</select>';
-    }
-}
-
-function saveSettle(){
-    const name=(document.getElementById('sf-name').value||'').trim();
-    const amount=parseInt(document.getElementById('sf-amount').value)||0;
-    const type=document.getElementById('sf-type').value;
-    const cycle=document.getElementById('sf-cycle').value;
-    const day=parseInt(document.getElementById('sf-day').value);
-    if(!name||!amount){alert('항목명과 금액을 입력하세요');return}
-    const entry={name,amount,type,cycle,ts:Date.now()};
-    if(cycle==='weekly')entry.dayOfWeek=day;else entry.dayOfMonth=day;
-    const id='sm_'+Date.now();
-    fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)})
-        .then(()=>{document.getElementById('settleFormBox').style.display='none'})
-        .catch(()=>alert('저장 실패'));
 }
 
 function deleteSettle(id){

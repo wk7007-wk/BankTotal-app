@@ -104,7 +104,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="tabs">
     <div class="tab" onclick="showTab('accounts')">계좌</div>
     <div class="tab" onclick="showTab('ledger')">가계부</div>
-    <div class="tab active" onclick="showTab('settle')">정산</div>
+    <div class="tab active" onclick="showTab('settle')">KCP</div>
 </div>
 
 <div class="section" id="sec-accounts">
@@ -501,9 +501,9 @@ function renderSettle(){
 
     let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
         <span style="min-width:55px;font-size:10px;color:#666">시점</span>
-        <span style="flex:1;font-size:10px;color:#666">내역 <span style="color:#444">탭=제외 · 좌우드래그=이동</span></span>
+        <span style="flex:1;font-size:10px;color:#666">내역 <span style="color:#444">탭=제외 · 드래그=이동</span></span>
         <span style="min-width:60px;text-align:right;font-size:10px;color:#666">금액</span>
-        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">예상잔고</span>
+        <span style="min-width:70px;text-align:right;font-size:10px;color:#666">잔고</span>
     </div>`;
 
     html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">

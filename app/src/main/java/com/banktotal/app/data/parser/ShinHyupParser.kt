@@ -17,12 +17,18 @@ class ShinHyupParser : BankSmsParser {
         val isDeposit = body.contains("입금")
         val transactionType = if (isDeposit) "입금" else "출금"
 
-        val amountRegex = if (isDeposit) {
-            Regex("""입금\s*([\d,]+)원""")
+        // 금액 파싱: "금액 N원" (줄바꿈 형식) 우선, 없으면 "입금/출금 N원" (한줄 형식)
+        val amountFromField = Regex("""금액\s*([\d,]+)원""").find(body)?.groupValues?.get(1)
+        val amountInline = if (isDeposit) {
+            Regex("""입금\s*([\d,]+)원""").find(body)?.groupValues?.get(1)
         } else {
-            Regex("""출금\s*([\d,]+)원""")
+            Regex("""출금\s*([\d,]+)원""").find(body)?.groupValues?.get(1)
         }
-        val amount = amountRegex.find(body)?.groupValues?.get(1)?.replace(",", "")?.toLongOrNull() ?: 0L
+        val amount = (amountFromField ?: amountInline)?.replace(",", "")?.toLongOrNull() ?: 0L
+
+        // 거래상대: "적요" 필드 우선, 없으면 기본 추출
+        val counterparty = Regex("""적요\s+(.+)""").find(body)?.groupValues?.get(1)?.trim()
+            ?: extractCounterparty(body, transactionType)
 
         return ParsedTransaction(
             bankName = "신협",
@@ -30,7 +36,7 @@ class ShinHyupParser : BankSmsParser {
             balance = balance,
             transactionType = transactionType,
             transactionAmount = amount,
-            counterparty = extractCounterparty(body, transactionType),
+            counterparty = counterparty,
             rawSms = body
         )
     }

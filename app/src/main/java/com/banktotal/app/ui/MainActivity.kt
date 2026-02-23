@@ -190,14 +190,42 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun setGeminiKey(key: String) = GeminiService.setApiKey(key)
+
+        @JavascriptInterface
+        fun getLatestImage(): String {
+            return try {
+                val dirs = listOf(
+                    java.io.File("/sdcard/Pictures/Screenshots"),
+                    java.io.File("/sdcard/DCIM/Screenshots"),
+                    java.io.File("/sdcard/DCIM/Camera"),
+                    java.io.File("/sdcard/Pictures")
+                )
+                val latest = dirs.flatMap { dir ->
+                    dir.listFiles()?.filter {
+                        it.isFile && it.name.matches(Regex(".*\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE))
+                    }?.toList() ?: emptyList()
+                }.maxByOrNull { it.lastModified() }
+
+                if (latest != null && latest.length() < 5 * 1024 * 1024) {
+                    android.util.Base64.encodeToString(latest.readBytes(), android.util.Base64.NO_WRAP)
+                } else ""
+            } catch (e: Exception) { "" }
+        }
     }
 
     // --- 권한 ---
     private fun requestPermissions() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val perms = mutableListOf<String>()
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                != PackageManager.PERMISSION_GRANTED) perms.add(Manifest.permission.READ_MEDIA_IMAGES)
+            if (perms.isNotEmpty()) notifPermissionLauncher.launch(perms.toTypedArray())
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
-                notifPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                notifPermissionLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
             }
         }
 

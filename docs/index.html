@@ -659,9 +659,9 @@ function buildFinCtx(){
     let c='';
     if(aiRules.business){
         c+=`[사업 정보] ${aiRules.business}\n`;
-        if(aiRules.income)c+='수입원: '+aiRules.income.join(', ')+'\n';
-        if(aiRules.expenses)c+='지출: '+aiRules.expenses.join(', ')+'\n';
-        if(aiRules.rules)c+='규칙: '+aiRules.rules.join(' / ')+'\n\n';
+        if(aiRules.income)c+='수입원: '+(Array.isArray(aiRules.income)?aiRules.income.join(', '):aiRules.income)+'\n';
+        if(aiRules.expenses)c+='지출: '+(Array.isArray(aiRules.expenses)?aiRules.expenses.join(', '):aiRules.expenses)+'\n';
+        if(aiRules.rules)c+='규칙: '+(Array.isArray(aiRules.rules)?aiRules.rules.join(' / '):aiRules.rules)+'\n\n';
     }
     c+=`[현재 재무]\n총 잔고: ${totalBal.toLocaleString()}원\n`;
     accs.forEach(a=>{c+=`- ${a.bank||''} ${a.account||''}: ${(a.balance||0).toLocaleString()}원\n`});

@@ -56,6 +56,29 @@ class BankNotificationListenerService : NotificationListenerService() {
         }
     }
 
+    /** 거래상대 추출 (여러 패턴 시도) */
+    private fun extractSmartCounterparty(content: String, transactionType: String): String {
+        // 1) 적요 필드 (신협 줄바꿈 형식)
+        val jeokyo = Regex("""적요\s+(.+)""").find(content)?.groupValues?.get(1)?.trim()
+        if (!jeokyo.isNullOrEmpty() && jeokyo.length <= 30) return jeokyo
+
+        // 2) KB 형식: 계좌번호 다음 줄 ~ 출금/입금 앞 (예: 올원오픈이원규)
+        val lines = content.replace("\r", "").split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        val typeKeyword = if (transactionType == "입금") "입금" else "출금"
+        for (i in lines.indices) {
+            if (lines[i] == typeKeyword && i > 0) {
+                val prev = lines[i - 1]
+                // 계좌번호/날짜/금액이 아닌 텍스트면 거래상대
+                if (!prev.matches(Regex("""[\d,.*\-/: ]+""")) && prev.length in 2..30) {
+                    return prev
+                }
+            }
+        }
+
+        // 3) 기본: 금액~잔액 사이
+        return extractCounterparty(content, transactionType)
+    }
+
     private fun parseMessageNotification(title: String, text: String): ParsedTransaction? {
         val content = "$title $text"
         if (!content.contains("잔액")) return null
@@ -93,13 +116,16 @@ class BankNotificationListenerService : NotificationListenerService() {
             else -> "기타"
         }
 
+        // 거래상대 추출: 적요 > KB라인 > 기본
+        val counterparty = extractSmartCounterparty(content, transactionType)
+
         return ParsedTransaction(
             bankName = bankName,
             accountNumber = accountNumber.ifEmpty { "${bankName}계좌" },
             balance = balance,
             transactionType = transactionType,
             transactionAmount = amount,
-            counterparty = extractCounterparty(content, transactionType),
+            counterparty = counterparty,
             rawSms = content
         )
     }

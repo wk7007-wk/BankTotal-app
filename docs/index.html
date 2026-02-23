@@ -47,6 +47,9 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .tx-amount.in{color:#4caf50}
 .tx-amount.out{color:#ef5350}
 .tx-balance{font-size:10px;color:#666;text-align:right}
+.tx-item.excluded{opacity:.35}
+.tx-item.excluded .tx-amount{text-decoration:line-through}
+.tx-excluded-tag{font-size:9px;color:#666;background:#333;padding:1px 5px;border-radius:4px;margin-left:4px}
 .cat-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a}
 .cat-name{font-size:14px;color:#ccc}
 .cat-count{font-size:11px;color:#666}
@@ -138,22 +141,33 @@ const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStar
 
 let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
 
-// --- 동일계좌 이체 필터 (동일금액+5분내+다른은행+입출금반대) ---
-function filterTransfers(txList){
+// --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
+function markTransactions(txList){
     const sorted=[...txList].sort((a,b)=>(a.ts||0)-(b.ts||0));
-    const skip=new Set();
+    // 1) 동일계좌 이체 (동일금액+5분내+다른은행+입출금반대)
     for(let i=0;i<sorted.length;i++){
-        if(skip.has(i))continue;
         for(let j=i+1;j<sorted.length;j++){
-            if(skip.has(j))continue;
             const a=sorted[i],b=sorted[j];
-            if(Math.abs((a.ts||0)-(b.ts||0))>300000)break;// 5분 초과면 중단
-            if(a.amount===b.amount&&a.type!==b.type&&a.bank!==b.bank){
-                skip.add(i);skip.add(j);break;
+            if(Math.abs((a.ts||0)-(b.ts||0))>300000)break;
+            if(a.amount===b.amount&&a.type!==b.type&&a.bank!==b.bank&&!a._excluded&&!b._excluded){
+                a._excluded=true;a._reason='이체';
+                b._excluded=true;b._reason='이체';
+                break;
             }
         }
     }
-    return sorted.filter((_,i)=>!skip.has(i));
+    // 2) 중복 (같은 은행+금액+타입, 60초 이내)
+    for(let i=0;i<sorted.length;i++){
+        if(sorted[i]._excluded)continue;
+        for(let j=i+1;j<sorted.length;j++){
+            const a=sorted[i],b=sorted[j];
+            if(Math.abs((a.ts||0)-(b.ts||0))>60000)break;
+            if(a.bank===b.bank&&a.amount===b.amount&&a.type===b.type&&!b._excluded){
+                b._excluded=true;b._reason='중복';
+            }
+        }
+    }
+    return sorted;
 }
 
 // --- 탭 관리 ---
@@ -183,7 +197,7 @@ function initSSE(){
     connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
-        transactions=filterTransfers(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLedger();
     });
     connectSSE('/banktotal/logs',d=>{
@@ -280,13 +294,13 @@ function renderLedger(){
     if(ledgerMode==='out')filtered=transactions.filter(t=>t.type==='출금');
 
     if(ledgerMode==='cat'){
-        renderCategory(transactions.filter(t=>t.type==='출금'));
+        renderCategory(transactions.filter(t=>t.type==='출금'&&!t._excluded));
         return;
     }
 
-    // 요약
-    const totalIn=transactions.filter(t=>t.type==='입금').reduce((s,t)=>s+(t.amount||0),0);
-    const totalOut=transactions.filter(t=>t.type==='출금').reduce((s,t)=>s+(t.amount||0),0);
+    // 요약 (제외 항목 합산 안 함)
+    const totalIn=transactions.filter(t=>t.type==='입금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
+    const totalOut=transactions.filter(t=>t.type==='출금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
     sum.innerHTML=`<div class="summary-row">
         <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4caf50">+${fmt(totalIn)}</div></div>
         <div class="summary-box"><div class="summary-label">출금</div><div class="summary-val" style="color:#ef5350">-${fmt(totalOut)}</div></div>
@@ -302,12 +316,14 @@ function renderLedger(){
 
     let html='';
     for(const[date,txs]of Object.entries(grouped)){
-        const dayTotal=txs.reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
+        const dayTotal=txs.filter(t=>!t._excluded).reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
         html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>=0?'#4caf50':'#ef5350'}">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span></div>`;
         txs.forEach(t=>{
             const isIn=t.type==='입금';
-            html+=`<div class="tx-item">
-                <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
+            const excCls=t._excluded?'excluded':'';
+            const tag=t._reason?`<span class="tx-excluded-tag">${t._reason}</span>`:'';
+            html+=`<div class="tx-item ${excCls}">
+                <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}${tag}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
                 <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance">잔액 ${fmt(t.balance)}</div></div>
             </div>`;
         });

@@ -19,7 +19,27 @@ object FirebaseTransactionWriter {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // 중복 방지: 최근 저장한 거래 해시 (은행+계좌+금액+타입)
+    private val recentHashes = LinkedHashSet<String>()
+    private const val MAX_RECENT = 20
+
+    private fun txHash(parsed: ParsedTransaction): String =
+        "${parsed.bankName}_${parsed.accountNumber}_${parsed.transactionType}_${parsed.transactionAmount}"
+
     fun save(parsed: ParsedTransaction) {
+        val hash = txHash(parsed)
+        synchronized(recentHashes) {
+            if (!recentHashes.add(hash)) {
+                Log.d(TAG, "중복 거래 스킵: $hash")
+                return
+            }
+            if (recentHashes.size > MAX_RECENT) recentHashes.remove(recentHashes.first())
+        }
+        // 10초 후 해시 제거 (같은 금액 연속 거래 허용)
+        scope.launch {
+            kotlinx.coroutines.delay(10000)
+            synchronized(recentHashes) { recentHashes.remove(hash) }
+        }
         scope.launch {
             try {
                 val obj = JSONObject()

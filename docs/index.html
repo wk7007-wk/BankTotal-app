@@ -7,7 +7,10 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
-.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:sticky;top:0;z-index:10}
+.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:sticky;top:0;z-index:10;position:relative}
+.refresh-btn{position:absolute;top:16px;right:12px;background:#333;border:none;color:#4fc3f7;font-size:20px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.refresh-btn:active{background:#444}
+.refresh-btn.spinning{animation:spin .6s linear}
 .subtotal-row{color:#aaa;font-size:14px;margin-bottom:2px;display:none}
 .subtotal-row.show{display:block}
 .subtotal-val{font-size:18px;color:#bbb}
@@ -67,12 +70,14 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .summary-row{display:flex;gap:8px}
 .summary-row .summary-box{flex:1}
 .empty{text-align:center;color:#555;padding:40px 0;font-size:14px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .version{text-align:center;color:#444;font-size:11px;padding:20px 0}
 </style>
 </head>
 <body>
 
 <div class="header" id="header">
+    <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
     <div class="subtotal-row" id="subtotalRow">
         소계 <span class="subtotal-val" id="subtotalVal">0</span>
     </div>
@@ -358,6 +363,15 @@ function renderPermissions(){
             <div class="perm-item"><span class="perm-name">모드</span><span style="color:#4fc3f7">웹 브라우저</span></div>
         `;
     }
+}
+
+// --- 새로고침 ---
+function doRefresh(){
+    const btn=document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    setTimeout(()=>btn.classList.remove('spinning'),600);
+    // 웹페이지 자체를 최신 버전으로 리로드
+    location.reload(true);
 }
 
 // --- 초기화 ---

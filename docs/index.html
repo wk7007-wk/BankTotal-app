@@ -75,6 +75,12 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .empty{text-align:center;color:#555;padding:40px 0;font-size:14px}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .version{text-align:center;color:#444;font-size:11px;padding:20px 0}
+.settle-form input,.settle-form select{width:100%;padding:8px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#e0e0e0;margin-bottom:6px;font-size:14px}
+.settle-form select{appearance:auto}
+.settle-tag{font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px}
+.settle-tag.manual{color:#4fc3f7;background:#4fc3f722}
+.settle-tag.auto{color:#ff9800;background:#ff980022}
+.predicted-bal{font-size:11px;color:#888;float:right}
 </style>
 </head>
 <body>
@@ -92,7 +98,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="tabs">
     <div class="tab active" onclick="showTab('accounts')">계좌</div>
     <div class="tab" onclick="showTab('ledger')">가계부</div>
-    <div class="tab" onclick="showTab('more')">더보기</div>
+    <div class="tab" onclick="showTab('settle')">정산</div>
 </div>
 
 <div class="section active" id="sec-accounts">
@@ -110,9 +116,13 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <div id="ledgerContent"></div>
 </div>
 
-<div class="section" id="sec-more">
-    <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:15px;color:#4fc3f7">로그 뷰어</div>
-    <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:15px;color:#4fc3f7">권한 상태</div>
+<div class="section" id="sec-settle">
+    <div id="settleSummary"></div>
+    <div id="settleContent"></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+        <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:13px;color:#4fc3f7;flex:1">로그</div>
+        <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:13px;color:#4fc3f7;flex:1">권한</div>
+    </div>
 </div>
 
 <div class="section" id="sec-logs">
@@ -139,7 +149,7 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
+let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){
@@ -174,12 +184,13 @@ function markTransactions(txList){
 function showTab(name){
     currentTab=name;
     document.querySelectorAll('.tab').forEach((t,i)=>{
-        const tabs=['accounts','ledger','more'];
+        const tabs=['accounts','ledger','settle'];
         t.classList.toggle('active',tabs[i]===name||(name==='logs'&&i===2)||(name==='perms'&&i===2));
     });
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
     if(name==='perms')renderPermissions();
+    if(name==='settle')renderSettle();
 }
 
 // --- Firebase SSE ---
@@ -204,6 +215,14 @@ function initSSE(){
         if(!d){logs=[];renderLogs();return;}
         logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLogs();
+    });
+    connectSSE('/banktotal/settle/manual',d=>{
+        settleManual=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+        if(currentTab==='settle')renderSettle();
+    });
+    connectSSE('/banktotal/settle/auto',d=>{
+        settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+        if(currentTab==='settle')renderSettle();
     });
 }
 
@@ -402,6 +421,160 @@ function renderPermissions(){
             <div class="perm-item"><span class="perm-name">모드</span><span style="color:#4fc3f7">웹 브라우저</span></div>
         `;
     }
+}
+
+// --- 정산 렌더링 ---
+function renderSettle(){
+    const sum=document.getElementById('settleSummary');
+    const el=document.getElementById('settleContent');
+    const currentBalance=Object.values(accounts).reduce((s,a)=>s+(a.balance||0),0);
+    const upcoming=generateUpcoming(settleManual,settleAuto,30);
+    const expectedIn=upcoming.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
+    const expectedOut=upcoming.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
+    const predicted=currentBalance+expectedIn-expectedOut;
+
+    sum.innerHTML=`
+        <div class="summary-box"><div class="summary-label">현재 잔고</div><div class="summary-val">${fmt(currentBalance)}</div></div>
+        <div class="summary-row">
+            <div class="summary-box"><div class="summary-label">예상 입금</div><div class="summary-val" style="color:#4caf50">+${fmt(expectedIn)}</div></div>
+            <div class="summary-box"><div class="summary-label">예상 출금</div><div class="summary-val" style="color:#ef5350">-${fmt(expectedOut)}</div></div>
+        </div>
+        <div class="summary-box"><div class="summary-label">예상 잔고 (30일)</div><div class="summary-val" style="color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>`;
+
+    let html='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px"><span style="color:#888;font-size:13px">예정 내역 (30일)</span><button onclick="showSettleForm()" style="background:#4fc3f7;color:#121212;border:none;padding:6px 14px;border-radius:16px;font-size:12px;cursor:pointer">+ 수동 추가</button></div>';
+    html+='<div id="settleFormBox" style="display:none"></div>';
+
+    if(!upcoming.length){
+        html+='<div class="empty">예정 내역 없음</div>';
+    }else{
+        const grouped={};
+        upcoming.forEach(u=>{const d=dateFmt(u.date);if(!grouped[d])grouped[d]=[];grouped[d].push(u)});
+        let bal=currentBalance;
+        for(const[date,items]of Object.entries(grouped)){
+            items.forEach(u=>{bal+=u.type==='입금'?u.amount:-u.amount});
+            html+=`<div class="tx-group"><div class="tx-date">${date}<span class="predicted-bal">예상잔고 ${fmt(bal)}</span></div>`;
+            items.forEach(u=>{
+                const isIn=u.type==='입금';
+                const srcTag=u.source==='manual'?'수동':'자동';
+                const srcCls=u.source==='manual'?'manual':'auto';
+                const cycleTxt=u.cycle==='weekly'?'매주':u.cycle==='monthly'?'매월':'';
+                const delBtn=u.source==='manual'?`<div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteSettle('${u._id}')">삭제</span></div>`:'';
+                html+=`<div class="tx-item">
+                    <div class="tx-left"><span class="tx-cp">${u.name} <span class="settle-tag ${srcCls}">${srcTag}</span></span><span class="tx-time">${cycleTxt}</span></div>
+                    <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(u.amount)}</div>${delBtn}</div>
+                </div>`;
+            });
+            html+='</div>';
+        }
+    }
+
+    // 등록된 수동 항목 목록
+    html+='<div style="margin-top:16px;color:#888;font-size:12px;border-top:1px solid #333;padding-top:12px">등록된 정기 항목</div>';
+    if(!settleManual.length){
+        html+='<div class="empty" style="padding:20px 0">등록된 항목 없음</div>';
+    }else{
+        const dayNames=['일','월','화','수','목','금','토'];
+        settleManual.forEach(m=>{
+            const cycleTxt=m.cycle==='weekly'?`매주 ${dayNames[m.dayOfWeek||0]}요일`:`매월 ${m.dayOfMonth||1}일`;
+            const isIn=m.type==='입금';
+            html+=`<div class="tx-item">
+                <div class="tx-left"><span class="tx-cp">${m.name}</span><span class="tx-time">${cycleTxt}</span></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(m.amount)}</div><div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteSettle('${m._id}')">삭제</span></div></div>
+            </div>`;
+        });
+    }
+
+    // 자동 감지 항목
+    if(settleAuto.length){
+        html+='<div style="margin-top:12px;color:#888;font-size:12px;border-top:1px solid #333;padding-top:12px">자동 감지 고지서</div>';
+        settleAuto.forEach(a=>{
+            const isIn=a.type==='입금';
+            const due=a.dueDate?dateFmt(a.dueDate):'미정';
+            html+=`<div class="tx-item">
+                <div class="tx-left"><span class="tx-cp">${a.name||'고지서'} <span class="settle-tag auto">자동</span></span><span class="tx-time">납기 ${due} · ${a.source||''}</span></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(a.amount)}</div><div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteAutoSettle('${a._id}')">삭제</span></div></div>
+            </div>`;
+        });
+    }
+
+    el.innerHTML=html;
+}
+
+function generateUpcoming(manual,auto,days){
+    const result=[];
+    const now=new Date();now.setHours(0,0,0,0);
+    const end=new Date(now.getTime()+days*86400000);
+    manual.forEach(m=>{
+        for(let i=0;i<days;i++){
+            const d=new Date(now.getTime()+i*86400000);
+            let match=false;
+            if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
+            if(m.cycle==='weekly'&&d.getDay()===(m.dayOfWeek||0))match=true;
+            if(match)result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),cycle:m.cycle,source:'manual',_id:m._id});
+        }
+    });
+    auto.forEach(a=>{
+        if(a.dueDate&&a.dueDate>=now.getTime()&&a.dueDate<=end.getTime()){
+            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:a.type||'출금',date:a.dueDate,source:'auto',_id:a._id});
+        }
+    });
+    return result.sort((a,b)=>a.date-b.date);
+}
+
+function showSettleForm(){
+    const box=document.getElementById('settleFormBox');
+    if(!box)return;
+    box.style.display='block';
+    const dayOpts=Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}일</option>`).join('');
+    box.innerHTML=`<div class="card settle-form" style="margin-bottom:12px">
+        <div style="font-size:14px;color:#4fc3f7;margin-bottom:10px">수동 항목 추가</div>
+        <input id="sf-name" placeholder="항목명 (예: 배달정산)">
+        <input id="sf-amount" type="number" placeholder="금액" inputmode="numeric">
+        <div style="display:flex;gap:6px">
+            <select id="sf-type"><option value="입금">입금</option><option value="출금">출금</option></select>
+            <select id="sf-cycle" onchange="updateCycleDay()"><option value="monthly">매월</option><option value="weekly">매주</option></select>
+        </div>
+        <div id="sf-day-wrap"><select id="sf-day">${dayOpts}</select></div>
+        <div style="display:flex;gap:6px;margin-top:2px">
+            <button onclick="saveSettle()" style="flex:1;padding:10px;background:#4fc3f7;color:#121212;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">저장</button>
+            <button onclick="document.getElementById('settleFormBox').style.display='none'" style="flex:1;padding:10px;background:#333;color:#aaa;border:none;border-radius:8px;font-size:14px;cursor:pointer">취소</button>
+        </div>
+    </div>`;
+}
+
+function updateCycleDay(){
+    const cycle=document.getElementById('sf-cycle').value;
+    const wrap=document.getElementById('sf-day-wrap');
+    if(cycle==='weekly'){
+        wrap.innerHTML='<select id="sf-day"><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option><option value="0">일요일</option></select>';
+    }else{
+        wrap.innerHTML='<select id="sf-day">'+Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}일</option>`).join('')+'</select>';
+    }
+}
+
+function saveSettle(){
+    const name=(document.getElementById('sf-name').value||'').trim();
+    const amount=parseInt(document.getElementById('sf-amount').value)||0;
+    const type=document.getElementById('sf-type').value;
+    const cycle=document.getElementById('sf-cycle').value;
+    const day=parseInt(document.getElementById('sf-day').value);
+    if(!name||!amount){alert('항목명과 금액을 입력하세요');return}
+    const entry={name,amount,type,cycle,ts:Date.now()};
+    if(cycle==='weekly')entry.dayOfWeek=day;else entry.dayOfMonth=day;
+    const id='sm_'+Date.now();
+    fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)})
+        .then(()=>{document.getElementById('settleFormBox').style.display='none'})
+        .catch(()=>alert('저장 실패'));
+}
+
+function deleteSettle(id){
+    if(!confirm('삭제하시겠습니까?'))return;
+    fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+}
+
+function deleteAutoSettle(id){
+    if(!confirm('삭제하시겠습니까?'))return;
+    fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
 }
 
 // --- 새로고침 ---

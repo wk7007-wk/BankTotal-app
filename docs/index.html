@@ -699,14 +699,17 @@ function buildFinCtx(){
     return c;
 }
 
-async function askAi(q){
+function askAi(q){
+    try{ _askAiInner(q) }catch(e){ alert('askAi에러:'+e.message) }
+}
+function _askAiInner(q){
     if(!q){q=(document.getElementById('aiInput').value||'').trim();if(!q)return}
     const key=loadAiKey();
     if(!key){alert('Gemini API Key를 입력하세요');return}
 
     document.getElementById('aiInput').value='';
     aiMessages.push({role:'user',text:q});
-    aiMessages.push({role:'bot',text:'분석 중...'});
+    aiMessages.push({role:'bot',text:'XHR 준비...'});
     renderAiMsgs();
 
     const btn=document.getElementById('aiSendBtn');
@@ -732,12 +735,15 @@ ${ctx}
 
 액션 태그 앞에 확인 메시지를 먼저 쓰세요. 여러 액션은 각각 별도 [ACTION]...[/ACTION]으로.`;
 
-    const body=JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]});
-    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
-    aiMessages[aiMessages.length-1].text='전송 '+Math.round(body.length/1024)+'KB...';
+    let body,url;
+    try{
+        body=JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]});
+        url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+    }catch(be){aiMessages[aiMessages.length-1].text='JSON에러:'+be.message;btn.disabled=false;btn.textContent='전송';renderAiMsgs();return}
+    aiMessages[aiMessages.length-1].text='XHR전송 '+Math.round(body.length/1024)+'KB...';
     renderAiMsgs();
     const t0=Date.now();
-    const prog=setInterval(()=>{const s=Math.round((Date.now()-t0)/1000);aiMessages[aiMessages.length-1].text='AI응답 대기 '+s+'초...';renderAiMsgs()},1500);
+    const prog=setInterval(()=>{const s=Math.round((Date.now()-t0)/1000);aiMessages[aiMessages.length-1].text='AI대기 '+s+'초 (xhr.readyState='+xhr.readyState+')';renderAiMsgs()},1500);
     const xhr=new XMLHttpRequest();
     xhr.open('POST',url,true);
     xhr.setRequestHeader('Content-Type','application/json');

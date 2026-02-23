@@ -747,7 +747,7 @@ ${ctx}
     let body,url;
     try{
         body=JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]});
-        url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+        url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key;
     }catch(be){aiMessages[aiMessages.length-1].text='JSON에러:'+be.message;btn.disabled=false;btn.textContent='전송';renderAiMsgs();return}
     aiMessages[aiMessages.length-1].text='XHR전송 '+Math.round(body.length/1024)+'KB...';
     renderAiMsgs();
@@ -823,7 +823,7 @@ ${ctx}
 등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]`;
 
     try{
-        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key,{
             method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({contents:[{parts:[
                 {text:prompt},
@@ -875,7 +875,7 @@ ${ctx}
 분석 결과를 간결하게 요약하고, 등록 가능한 항목이 있으면 액션 태그를 추가하세요.`;
 
         try{
-            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key,{
                 method:'POST',headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({contents:[{parts:[
                     {text:prompt},

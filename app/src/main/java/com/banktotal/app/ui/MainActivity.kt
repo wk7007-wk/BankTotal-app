@@ -64,12 +64,13 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.settings.databaseEnabled = true
         webView.clearCache(true)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
         webView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
         webView.addJavascriptInterface(NativeBridge(), "NativeBridge")
         webView.webViewClient = DashboardWebViewClient()
         webView.webChromeClient = WebChromeClient()
         webView.setBackgroundColor(0xFF121212.toInt())
-        webView.loadUrl(DASHBOARD_URL)
+        webView.loadUrl(DASHBOARD_URL + "?v=" + System.currentTimeMillis())
     }
 
     // --- WebViewClient: 캐시 저장/오프라인 폴백 ---
@@ -198,7 +199,8 @@ class MainActivity : AppCompatActivity() {
                     java.io.File("/sdcard/Pictures/Screenshots"),
                     java.io.File("/sdcard/DCIM/Screenshots"),
                     java.io.File("/sdcard/DCIM/Camera"),
-                    java.io.File("/sdcard/Pictures")
+                    java.io.File("/sdcard/Pictures"),
+                    java.io.File("/sdcard/Download")
                 )
                 val latest = dirs.flatMap { dir ->
                     dir.listFiles()?.filter {

@@ -26,6 +26,9 @@ class BankNotificationListenerService : NotificationListenerService() {
         sbn ?: return
         val packageName = sbn.packageName ?: return
 
+        // 은행 관련 패키지만 처리 (PosDelay 등 무관한 앱 즉시 무시)
+        if (packageName !in messagingPackages && !shinhanParser.canParse(packageName)) return
+
         val extras = sbn.notification.extras
         val title = extras.getString("android.title") ?: ""
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
@@ -36,10 +39,8 @@ class BankNotificationListenerService : NotificationListenerService() {
 
         if (shinhanParser.canParse(packageName)) {
             parsed = shinhanParser.parse(title, text)
-        } else if (packageName in messagingPackages) {
-            parsed = parseMessageNotification(title, text)
         } else {
-            return
+            parsed = parseMessageNotification(title, text)
         }
 
         if (parsed == null) {

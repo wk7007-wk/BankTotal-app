@@ -659,7 +659,7 @@ ${ctx}
 액션 태그 앞에 확인 메시지를 먼저 쓰세요. 여러 액션은 각각 별도 [ACTION]...[/ACTION]으로.`;
 
     try{
-        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key='+key,{
             method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]})
         });
@@ -714,7 +714,7 @@ ${ctx}
 등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]`;
 
     try{
-        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key='+key,{
             method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({contents:[{parts:[
                 {text:prompt},
@@ -766,7 +766,7 @@ ${ctx}
 분석 결과를 간결하게 요약하고, 등록 가능한 항목이 있으면 액션 태그를 추가하세요.`;
 
         try{
-            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key='+key,{
                 method:'POST',headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({contents:[{parts:[
                     {text:prompt},

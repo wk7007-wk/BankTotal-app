@@ -128,7 +128,9 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <div style="margin-top:12px">
         <div class="ai-msgs" id="aiMsgs"></div>
         <div class="ai-input-row">
-            <input class="ai-input" id="aiInput" placeholder="항목등록, 재무질문..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:13px;padding:8px">
+            <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
+            <button onclick="document.getElementById('aiFileInput').click()" style="padding:8px 10px;background:#2a2a40;border:1px solid #333;border-radius:8px;color:#aaa;font-size:16px;cursor:pointer">&#128247;</button>
+            <input class="ai-input" id="aiInput" placeholder="항목등록, 재무질문, 사진분석..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:13px;padding:8px">
             <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:8px 12px;font-size:13px">AI</button>
         </div>
     </div>
@@ -675,6 +677,63 @@ ${ctx}
     }
     btn.disabled=false;btn.textContent='전송';
     renderAiMsgs();
+}
+
+async function analyzeImage(input){
+    const file=input.files[0];if(!file)return;
+    const key=loadAiKey();
+    if(!key){alert('Gemini API Key를 먼저 설정하세요');return}
+
+    const reader=new FileReader();
+    reader.onload=async function(){
+        const base64=reader.result.split(',')[1];
+        const mime=file.type||'image/jpeg';
+
+        aiMessages.push({role:'user',text:'[이미지 분석 요청]'});
+        aiMessages.push({role:'bot',text:'이미지 분석 중...'});
+        renderAiMsgs();
+
+        const btn=document.getElementById('aiSendBtn');
+        btn.disabled=true;btn.textContent='...';
+
+        const ctx=buildFinCtx();
+        const prompt=`당신은 개인 재무 상담사입니다. 이 이미지를 분석하세요.
+
+고지서/청구서/영수증/은행명세서/카드내역 등 금융 문서라면:
+- 항목명, 금액, 납기일, 입금/출금 여부를 추출하세요
+- 정기 항목이면 등록 액션을 추가하세요
+
+${ctx}
+
+[액션 형식]
+등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]
+
+분석 결과를 간결하게 요약하고, 등록 가능한 항목이 있으면 액션 태그를 추가하세요.`;
+
+        try{
+            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({contents:[{parts:[
+                    {text:prompt},
+                    {inline_data:{mime_type:mime,data:base64}}
+                ]}]})
+            });
+            const d=await r.json();
+            let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'분석 실패';
+            const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+            for(const m of actionMatches){
+                try{await executeAiAction(JSON.parse(m[1]))}catch(e){}
+            }
+            if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+            aiMessages[aiMessages.length-1].text=reply;
+        }catch(e){
+            aiMessages[aiMessages.length-1].text='오류: '+e.message;
+        }
+        btn.disabled=false;btn.textContent='AI';
+        renderAiMsgs();
+        input.value='';
+    };
+    reader.readAsDataURL(file);
 }
 
 async function executeAiAction(act){

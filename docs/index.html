@@ -99,9 +99,9 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 
 <div class="section" id="sec-ledger">
     <div class="filter-row" id="ledgerFilter">
-        <div class="filter-btn active" onclick="setLedgerFilter('all')">전체</div>
+        <div class="filter-btn active" onclick="setLedgerFilter('out')">출금</div>
         <div class="filter-btn" onclick="setLedgerFilter('in')">입금</div>
-        <div class="filter-btn" onclick="setLedgerFilter('out')">출금</div>
+        <div class="filter-btn" onclick="setLedgerFilter('all')">전체</div>
         <div class="filter-btn" onclick="setLedgerFilter('cat')">카테고리</div>
     </div>
     <div id="ledgerSummary"></div>
@@ -132,7 +132,7 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='all',logFilterTag='all';
+let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
 
 // --- 탭 관리 ---
 function showTab(name){

@@ -185,7 +185,7 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],currentTab='accounts',ledgerMode='out',logFilterTag='all';
+let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},currentTab='accounts',ledgerMode='out',logFilterTag='all';
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){
@@ -260,6 +260,7 @@ function initSSE(){
         settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
         if(currentTab==='settle')renderSettle();
     });
+    fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
 }
 
 // --- NativeBridge 지원 (앱 내 WebView) ---
@@ -493,7 +494,7 @@ function renderSettle(){
                 const isIn=u.type==='입금';
                 const srcTag=u.source==='manual'?'수동':'자동';
                 const srcCls=u.source==='manual'?'manual':'auto';
-                const cycleTxt=u.cycle==='weekly'?'매주':u.cycle==='monthly'?'매월':'';
+                const cycleTxt=u.cycle==='daily'?'매일':u.cycle==='weekly'?'매주':u.cycle==='monthly'?'매월':'';
                 const delBtn=u.source==='manual'?`<div style="text-align:right"><span style="font-size:10px;color:#ef5350;cursor:pointer" onclick="deleteSettle('${u._id}')">삭제</span></div>`:'';
                 html+=`<div class="tx-item">
                     <div class="tx-left"><span class="tx-cp">${u.name} <span class="settle-tag ${srcCls}">${srcTag}</span></span><span class="tx-time">${cycleTxt}</span></div>
@@ -511,7 +512,7 @@ function renderSettle(){
     }else{
         const dayNames=['일','월','화','수','목','금','토'];
         settleManual.forEach(m=>{
-            const cycleTxt=m.cycle==='weekly'?`매주 ${dayNames[m.dayOfWeek||0]}요일`:`매월 ${m.dayOfMonth||1}일`;
+            const cycleTxt=m.cycle==='daily'?'매일':m.cycle==='weekly'?`매주 ${dayNames[m.dayOfWeek||0]}요일`:`매월 ${m.dayOfMonth||1}일`;
             const isIn=m.type==='입금';
             html+=`<div class="tx-item">
                 <div class="tx-left"><span class="tx-cp">${m.name}</span><span class="tx-time">${cycleTxt}</span></div>
@@ -544,6 +545,7 @@ function generateUpcoming(manual,auto,days){
         for(let i=0;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;
+            if(m.cycle==='daily')match=true;
             if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
             if(m.cycle==='weekly'&&d.getDay()===(m.dayOfWeek||0))match=true;
             if(match)result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),cycle:m.cycle,source:'manual',_id:m._id});
@@ -568,7 +570,7 @@ function showSettleForm(){
         <input id="sf-amount" type="number" placeholder="금액" inputmode="numeric">
         <div style="display:flex;gap:6px">
             <select id="sf-type"><option value="입금">입금</option><option value="출금">출금</option></select>
-            <select id="sf-cycle" onchange="updateCycleDay()"><option value="monthly">매월</option><option value="weekly">매주</option></select>
+            <select id="sf-cycle" onchange="updateCycleDay()"><option value="daily">매일</option><option value="monthly">매월</option><option value="weekly">매주</option></select>
         </div>
         <div id="sf-day-wrap"><select id="sf-day">${dayOpts}</select></div>
         <div style="display:flex;gap:6px;margin-top:2px">
@@ -581,7 +583,9 @@ function showSettleForm(){
 function updateCycleDay(){
     const cycle=document.getElementById('sf-cycle').value;
     const wrap=document.getElementById('sf-day-wrap');
-    if(cycle==='weekly'){
+    if(cycle==='daily'){
+        wrap.innerHTML='<span style="color:#666;font-size:12px">매일 반복</span>';
+    }else if(cycle==='weekly'){
         wrap.innerHTML='<select id="sf-day"><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option><option value="0">일요일</option></select>';
     }else{
         wrap.innerHTML='<select id="sf-day">'+Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}일</option>`).join('')+'</select>';
@@ -667,7 +671,14 @@ function loadAiKey(){
 function buildFinCtx(){
     const accs=Object.values(accounts);
     const totalBal=accs.reduce((s,a)=>s+(a.balance||0),0);
-    let c=`[현재 재무]\n총 잔고: ${totalBal.toLocaleString()}원\n`;
+    let c='';
+    if(aiRules.business){
+        c+=`[사업 정보] ${aiRules.business}\n`;
+        if(aiRules.income)c+='수입원: '+aiRules.income.join(', ')+'\n';
+        if(aiRules.expenses)c+='지출: '+aiRules.expenses.join(', ')+'\n';
+        if(aiRules.rules)c+='규칙: '+aiRules.rules.join(' / ')+'\n\n';
+    }
+    c+=`[현재 재무]\n총 잔고: ${totalBal.toLocaleString()}원\n`;
     accs.forEach(a=>{c+=`- ${a.bank||''} ${a.account||''}: ${(a.balance||0).toLocaleString()}원\n`});
 
     const now=Date.now();
@@ -714,7 +725,23 @@ async function askAi(q){
     btn.disabled=true;btn.textContent='...';
 
     const ctx=buildFinCtx();
-    const sys=`당신은 개인 재무 상담사입니다. 사용자의 실제 계좌와 거래 내역을 기반으로 예산 설계, 지출 분석, 절약 팁, 잔고 예측 등을 제공합니다.\n\n${ctx}\n\n위 데이터를 기반으로 구체적 숫자를 활용해 분석하세요. 한국어로 간결하게 답변하세요.`;
+    const sys=`당신은 개인 재무 상담사입니다. 사용자의 실제 계좌와 거래 내역을 기반으로 예산 설계, 지출 분석, 절약 팁, 잔고 예측 등을 제공합니다.
+
+${ctx}
+
+위 데이터를 기반으로 구체적 숫자를 활용해 분석하세요. 한국어로 간결하게 답변하세요.
+
+[중요] 사용자가 정기 항목이나 규칙 등록/삭제를 요청하면, 답변 맨 끝에 액션 태그를 추가하세요:
+
+정기항목 등록: [ACTION]{"act":"add","name":"항목명","amount":금액숫자,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly","day":숫자}[/ACTION]
+- cycle: daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31)
+- 130만원→1300000, 50만원→500000 등 반드시 숫자로 변환
+정기항목 삭제: [ACTION]{"act":"del","name":"항목명"}[/ACTION]
+규칙 추가: [ACTION]{"act":"add_rule","rule":"새 규칙 내용"}[/ACTION]
+규칙 삭제: [ACTION]{"act":"del_rule","rule":"삭제할 규칙 내용"}[/ACTION]
+사업정보 수정: [ACTION]{"act":"set_info","key":"income또는expenses또는accounts또는business","value":"값"}[/ACTION]
+
+액션 태그 앞에 확인 메시지를 먼저 쓰세요. 여러 액션은 각각 별도 [ACTION]...[/ACTION]으로.`;
 
     try{
         const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
@@ -722,13 +749,45 @@ async function askAi(q){
             body:JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]})
         });
         const d=await r.json();
-        const reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'응답 없음';
+        let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'응답 없음';
+        // 액션 태그 감지 및 실행 (복수 지원)
+        const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+        for(const m of actionMatches){
+            try{await executeAiAction(JSON.parse(m[1]))}catch(e){}
+        }
+        if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
         aiMessages[aiMessages.length-1].text=reply;
     }catch(e){
         aiMessages[aiMessages.length-1].text='오류: '+e.message;
     }
     btn.disabled=false;btn.textContent='전송';
     renderAiMsgs();
+}
+
+async function executeAiAction(act){
+    if(act.act==='add'){
+        const entry={name:act.name||'항목',amount:act.amount||0,type:act.txType||'입금',cycle:act.cycle||'daily',ts:Date.now()};
+        if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
+        else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
+        const id='sm_'+Date.now();
+        await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)});
+    }else if(act.act==='del'){
+        const target=settleManual.find(m=>m.name===act.name);
+        if(target)await fetch(FB+'/banktotal/settle/manual/'+target._id+'.json',{method:'DELETE'});
+    }else if(act.act==='add_rule'){
+        const rules=aiRules.rules||[];
+        rules.push(act.rule);
+        await fetch(FB+'/banktotal/ai_rules/rules.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules)});
+        aiRules.rules=rules;
+    }else if(act.act==='del_rule'){
+        const rules=(aiRules.rules||[]).filter(r=>r!==act.rule);
+        await fetch(FB+'/banktotal/ai_rules/rules.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules)});
+        aiRules.rules=rules;
+    }else if(act.act==='set_info'){
+        const val=act.value;
+        await fetch(FB+'/banktotal/ai_rules/'+act.key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)});
+        aiRules[act.key]=val;
+    }
 }
 
 function renderAiMsgs(){

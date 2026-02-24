@@ -574,15 +574,16 @@ function editSettleAmount(id,cur){
 }
 
 // --- AI 자동 금액 보정: 0원 항목을 가계부 거래내역과 매칭 ---
-let autoCorrectRan=false;
+// 월 1회 실행 (전달 거래 기준)
 function autoCorrectSettleAmounts(){
-    if(autoCorrectRan)return;
+    const runKey='autoCorrect_'+new Date().getFullYear()+'_'+new Date().getMonth();
+    if(localStorage.getItem(runKey))return;
     const zeroItems=settleManual.filter(m=>!m.amount||m.amount===0);
     if(!zeroItems.length)return;
     if(!transactions.length)return;
     const key=loadAiKey();
     if(!key)return;
-    autoCorrectRan=true;
+    localStorage.setItem(runKey,'1');
 
     // 최근 90일 거래 수집
     const cutoff=Date.now()-90*86400000;

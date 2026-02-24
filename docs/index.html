@@ -492,6 +492,13 @@ function renderSettle(){
     const dayNames=['일','월','화','수','목','금','토'];
 
     const items=generateAllItems(settleManual,settleAuto,30);
+    // BBQ BLOCK 금액을 오늘 항목으로 추가
+    const bbqAcc=Object.values(accounts).find(a=>(a.bankName||'').toUpperCase().includes('BBQ')||(a.displayName||'').toUpperCase().includes('BLOCK'));
+    if(bbqAcc&&bbqAcc.balance>0){
+        const bk='_block_today';
+        const st=ist(bk);
+        items.push({name:'BLOCK',amount:bbqAcc.balance,type:'출금',date:now.getTime(),_key:bk,_id:bk,isBlock:true,excluded:st.ex});
+    }
     const included=items.filter(u=>!u.excluded);
     const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
     const expectedOut=included.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
@@ -534,9 +541,9 @@ function renderSettle(){
                 const delta=isIn?u.amount:-u.amount;
                 if(!u.excluded)bal+=delta;
                 const op=u.excluded?'opacity:.35;':'';
-                const bg=u.excluded?'':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'';
+                const bg=u.excluded?'':u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'';
                 const amtC=isIn?'#4caf50':'#ef5350';
-                const nmC=u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
+                const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
                 const dl=j===0?`${dk}(${dayName})`:'';
                 const tag=u.isPending?' ⚡':'';
                 const stk=u.excluded?'text-decoration:line-through;':'';
@@ -677,7 +684,11 @@ function generateAllItems(manual,auto,days){
             let match=false;
             if(m.cycle==='daily')match=true;
             if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
-            if(m.cycle==='weekly'&&d.getDay()===(m.dayOfWeek||0))match=true;
+            if(m.cycle==='weekly'){
+                if(d.getDay()===(m.dayOfWeek||0))match=true;
+                // 일요일(0) 물류는 토요일(6)부터 표기
+                if((m.dayOfWeek||0)===0&&d.getDay()===6&&m.name==='물류'){match=true;}
+            }
             if(match){
                 const key=m._id+'_'+i;
                 const st=ist(key);

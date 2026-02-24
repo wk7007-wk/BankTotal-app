@@ -761,6 +761,10 @@ function generateAllItems(manual,auto,days){
         for(let i=0;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;
+            if(m.cycle==='once'&&m.date){
+                const od=new Date(m.date+'T00:00:00+09:00');
+                if(d.getFullYear()===od.getFullYear()&&d.getMonth()===od.getMonth()&&d.getDate()===od.getDate())match=true;
+            }
             if(m.cycle==='daily')match=true;
             if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
             if(m.cycle==='weekly'){

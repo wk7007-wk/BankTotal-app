@@ -582,7 +582,7 @@ function renderSettle(){
         <span style="min-width:70px;text-align:right;font-size:14px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
     </div>`;
     // 계좌 리스트
-    const acctList=Object.values(accounts).filter(a=>a.balance!==undefined).sort((a,b)=>(b.balance||0)-(a.balance||0));
+    const acctList=Object.values(accounts).filter(a=>a.balance!==undefined&&!((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/)).sort((a,b)=>(b.balance||0)-(a.balance||0));
     acctList.forEach(a=>{
         const bn=a.bankName||a.bank||'';
         const bal_=a.balance||0;

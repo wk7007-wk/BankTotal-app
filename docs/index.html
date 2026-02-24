@@ -1035,8 +1035,11 @@ async function executeAiAction(act){
         const id='sm_'+Date.now();
         await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)});
     }else if(act.act==='del'){
-        const target=settleManual.find(m=>m.name===act.name);
-        if(target)await fetch(FB+'/banktotal/settle/manual/'+target._id+'.json',{method:'DELETE'});
+        const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
+        for(const t of targets){
+            await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'DELETE'});
+        }
+        if(targets.length)aiMessages[aiMessages.length-1].text+=' ('+targets.length+'건 삭제)';
     }else if(act.act==='add_rule'){
         const rules=aiRules.rules||[];
         rules.push(act.rule);

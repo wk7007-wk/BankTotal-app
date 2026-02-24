@@ -212,13 +212,33 @@ function showTab(name){
 
 // --- Firebase SSE ---
 function connectSSE(path,handler){
+    let cache=null;
     const es=new EventSource(FB+path+'.json');
-    es.onmessage=e=>{
-        try{handler(JSON.parse(e.data));}catch(ex){}
-    };
+    // Firebase SSE는 named event ('put','patch')로 전송 → addEventListener 사용
+    es.addEventListener('put',e=>{
+        try{
+            const msg=JSON.parse(e.data);
+            if(msg.path==='/'){
+                cache=msg.data;
+                handler(cache);
+            }else{
+                // 부분 업데이트: 키 머지
+                const key=msg.path.replace(/^\//,'');
+                if(cache&&key){
+                    if(msg.data===null){delete cache[key];}else{cache[key]=msg.data;}
+                    handler(cache);
+                }else{
+                    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{cache=d;handler(d);}).catch(()=>{});
+                }
+            }
+        }catch(ex){}
+    });
+    es.addEventListener('patch',e=>{
+        fetch(FB+path+'.json').then(r=>r.json()).then(d=>{cache=d;handler(d);}).catch(()=>{});
+    });
     es.onerror=()=>{setTimeout(()=>connectSSE(path,handler),5000);es.close()};
     // 초기 로드 (SSE put 이벤트 전에 REST로 즉시 로드)
-    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{if(d)handler(d);}).catch(()=>{});
+    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{if(d){cache=d;handler(d);}}).catch(()=>{});
 }
 
 function initSSE(){

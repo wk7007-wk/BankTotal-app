@@ -221,7 +221,7 @@ function connectSSE(path,handler){
 }
 
 function initSSE(){
-    connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
+    connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts();if(currentTab==='settle')renderSettle()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
         const prev=transactions.length;

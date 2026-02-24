@@ -478,7 +478,7 @@ document.addEventListener('touchend',function(e){
     const dt=Date.now()-swSt.t0;
     if(swSt.sw){
         const dx=swSt.dx||0;
-        const days=Math.round(dx/60);
+        const days=dx>30?1:dx<-30?-1:0;
         if(days!==0){ist(swSt.key).sh+=days;saveItemState();renderSettle()}
     }else if(!swSt.moved&&dt<300){
         toggleItem(swSt.key);

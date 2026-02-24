@@ -166,7 +166,7 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},currentTab='settle',ledgerMode='out',logFilterTag='all';
+let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},sfaDaily={},currentTab='settle',ledgerMode='out',logFilterTag='all';
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){
@@ -266,6 +266,10 @@ function initSSE(){
     });
     connectSSE('/banktotal/settle/auto',d=>{
         settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+        if(currentTab==='settle')renderSettle();
+    });
+    connectSSE('/banktotal/sfa_daily',d=>{
+        sfaDaily=d||{};
         if(currentTab==='settle')renderSettle();
     });
     fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
@@ -515,13 +519,19 @@ function renderSettle(){
     const dayNames=['일','월','화','수','목','금','토'];
 
     const items=generateAllItems(settleManual,settleAuto,30);
-    // SFA 항목 핑크색 표시 + 제네시스 출금분 차감 (고정값 사용, BLOCK 실시간 미사용)
+    // SFA: 당일 최초 BLOCK 값(sfa_daily)을 고정값으로 사용 + 제네시스 차감
     const genesisKeywords=['제네시스','genesis','올원오픈주','토스 (주)제','(주)제'];
     items.forEach(u=>{
         if(u.name==='SFA'){
             u.isBlock=true;
-            // 해당 날짜의 제네시스 출금 합산하여 SFA에서 차감
             const dk=dateFmt(u.date);
+            // sfa_daily에 해당 날짜 초기값이 있으면 사용 (0→비제로 전환 시점 캡처값)
+            const ymd=new Date(u.date);
+            const dailyKey=ymd.getFullYear()+'-'+(ymd.getMonth()+1).toString().padStart(2,'0')+'-'+ymd.getDate().toString().padStart(2,'0');
+            if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount>0){
+                u.amount=sfaDaily[dailyKey].amount;
+            }
+            // 해당 날짜의 제네시스 출금 합산하여 SFA에서 차감
             const genTotal=transactions.filter(t=>{
                 if(t.type!=='출금')return false;
                 const cp=(t.counterparty||'').toLowerCase();

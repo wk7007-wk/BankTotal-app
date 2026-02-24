@@ -5,13 +5,18 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.content.Context
 import com.banktotal.app.data.repository.AccountRepository
 import com.banktotal.app.service.LogWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +65,8 @@ class BlockAmountAccessibilityService : AccessibilityService() {
                 CoroutineScope(Dispatchers.IO).launch {
                     val repo = AccountRepository(applicationContext)
                     repo.upsertBlockAmount("BBQ", amount)
+                    // 당일 최초 감지 시 SFA 일일 초기값 저장
+                    saveDailyInitialSfa(amount)
                 }
             }
         } catch (e: Exception) {
@@ -147,6 +154,33 @@ class BlockAmountAccessibilityService : AccessibilityService() {
             child.recycle()
         }
         return sb.toString()
+    }
+
+    /** 당일 최초 BLOCK 감지 시 초기값을 Firebase sfa_daily에 저장 */
+    private fun saveDailyInitialSfa(amount: Long) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+        val prefs = applicationContext.getSharedPreferences("sfa_daily", Context.MODE_PRIVATE)
+        val savedDate = prefs.getString("last_date", "")
+        if (savedDate == today) return // 이미 오늘 저장함
+        prefs.edit().putString("last_date", today).putLong("initial_amount", amount).apply()
+        LogWriter.tx("SFA 일일 초기값 저장: ${today} ${amount}원")
+        try {
+            val obj = JSONObject()
+            obj.put("amount", amount)
+            obj.put("ts", System.currentTimeMillis())
+            val conn = URL("https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app/banktotal/sfa_daily/$today.json")
+                .openConnection() as HttpURLConnection
+            conn.requestMethod = "PUT"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            OutputStreamWriter(conn.outputStream).use { it.write(obj.toString()) }
+            conn.responseCode
+            conn.disconnect()
+        } catch (e: Exception) {
+            LogWriter.err("SFA 일일 초기값 Firebase 저장 실패: ${e.message}")
+        }
     }
 
     private fun log(message: String) {

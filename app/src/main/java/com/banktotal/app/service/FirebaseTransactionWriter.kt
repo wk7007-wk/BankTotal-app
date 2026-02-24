@@ -107,4 +107,33 @@ object FirebaseTransactionWriter {
             }
         }
     }
+
+    fun saveBlockBalance(bankName: String, balance: Long) {
+        scope.launch {
+            try {
+                val key = "${bankName}_BLOCK".replace(Regex("[.#$/\\[\\]]"), "_")
+                val obj = JSONObject()
+                obj.put("bank", bankName)
+                obj.put("account", "SFA BLOCK")
+                obj.put("balance", balance)
+                obj.put("updated", System.currentTimeMillis())
+
+                val conn = URL("$FIREBASE_BASE/banktotal/accounts/$key.json")
+                    .openConnection() as HttpURLConnection
+                conn.requestMethod = "PUT"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                OutputStreamWriter(conn.outputStream).use { it.write(obj.toString()) }
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..299) {
+                    Log.d(TAG, "SFA BLOCK 동기화: ${balance}원")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "SFA BLOCK 동기화 실패: ${e.message}")
+            }
+        }
+    }
 }

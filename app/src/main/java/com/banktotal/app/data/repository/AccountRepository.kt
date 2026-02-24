@@ -127,6 +127,8 @@ class AccountRepository(private val context: Context) {
                 )
             )
         }
+        // Firebase에 SFA BLOCK 잔고 동기화
+        FirebaseTransactionWriter.saveBlockBalance(bankName, negativeAmount)
         refreshDisplays()
     }
 

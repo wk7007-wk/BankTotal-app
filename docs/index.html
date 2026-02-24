@@ -531,8 +531,15 @@ function renderSettle(){
         <div class="summary-box"><div class="summary-label">예상 30일</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
     </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
 
+    // 날짜 지난 미지출 항목 → 오늘로 이월
+    const todayTs=now.getTime();
+    items.forEach(u=>{
+        if(u.date<todayTs&&!u.excluded)u.date=todayTs;
+    });
+    // 날짜별 그룹 + 활성 상단, 제외 하단 정렬
     const upByDate={};
     items.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
+    Object.values(upByDate).forEach(arr=>arr.sort((a,b)=>(a.excluded?1:0)-(b.excluded?1:0)));
 
     let html=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
         <span style="min-width:55px;font-size:10px;color:#666">시점</span>

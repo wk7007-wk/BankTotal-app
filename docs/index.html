@@ -618,16 +618,27 @@ ${Object.entries(txSummary).map(([k,v])=>k+': '+v.join(', ')).join('\n')}
             const matches=JSON.parse(clean);
             if(!Array.isArray(matches))return;
             let updated=0;
+            const changes=[];
             matches.forEach(m=>{
                 if(!m.amount||m.amount<=0)return;
                 const item=zeroItems.find(z=>z.name===m.name);
                 if(!item)return;
-                // Firebase 업데이트
                 fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify({amount:m.amount})});
+                changes.push(item.name+' → '+fmt(m.amount)+'원');
                 item.amount=m.amount;
                 updated++;
             });
-            if(updated>0)renderSettle();
+            if(updated>0){
+                renderSettle();
+                // AI 채팅에 결과 표시
+                const msg='[자동보정] 거래내역 매칭 '+updated+'건\n'+changes.join('\n');
+                const el=document.getElementById('aiMsgs');
+                if(el){
+                    aiMessages.push({role:'ai',text:msg});
+                    el.innerHTML+=`<div style="background:#1a3a1a;border:1px solid #2e7d32;border-radius:8px;padding:8px;margin:4px 0;font-size:12px;color:#81c784;white-space:pre-line">${msg}</div>`;
+                    el.scrollTop=el.scrollHeight;
+                }
+            }
         }catch(e){}
     }).catch(()=>{});
 }

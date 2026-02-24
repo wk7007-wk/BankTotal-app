@@ -450,8 +450,10 @@ function renderPermissions(){
 // --- 정산 렌더링 ---
 // 정산 시뮬레이션 — 개별 항목 상태 (_key → {ex, sh})
 let itemState={};
+try{const s=localStorage.getItem('settleItemState');if(s)itemState=JSON.parse(s)}catch(e){}
+function saveItemState(){try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}}
 function ist(k){if(!itemState[k])itemState[k]={ex:false,sh:0};return itemState[k]}
-function toggleItem(k){ist(k).ex=!ist(k).ex;renderSettle()}
+function toggleItem(k){ist(k).ex=!ist(k).ex;saveItemState();renderSettle()}
 
 // 스와이프 드래그 — 좌우=날짜이동, 탭=포함/제외
 let swSt=null;
@@ -477,7 +479,7 @@ document.addEventListener('touchend',function(e){
     if(swSt.sw){
         const dx=swSt.dx||0;
         const days=Math.round(dx/60);
-        if(days!==0){ist(swSt.key).sh+=days;renderSettle()}
+        if(days!==0){ist(swSt.key).sh+=days;saveItemState();renderSettle()}
     }else if(!swSt.moved&&dt<300){
         toggleItem(swSt.key);
     }

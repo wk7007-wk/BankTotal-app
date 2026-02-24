@@ -11,11 +11,11 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .refresh-btn{position:absolute;top:16px;right:12px;background:#333;border:none;color:#4fc3f7;font-size:20px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .refresh-btn:active{background:#444}
 .refresh-btn.spinning{animation:spin .6s linear}
-.subtotal-row{color:#aaa;font-size:14px;margin-bottom:2px;display:none}
+.subtotal-row{color:#fff;font-size:14px;margin-bottom:2px;display:none}
 .subtotal-row.show{display:block}
-.subtotal-val{font-size:18px;color:#bbb}
-.total-label{color:#888;font-size:14px;margin-top:4px}
-.total-val{font-size:32px;font-weight:bold;color:#fff;margin:4px 0}
+.subtotal-val{font-size:32px;font-weight:bold;color:#fff}
+.total-label{color:#666;font-size:12px;margin-top:4px}
+.total-val{font-size:16px;color:#888;margin:2px 0}
 .last-update{color:#666;font-size:12px}
 .tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:0;z-index:9}
 .tab{flex:1;min-width:60px;padding:10px 8px;text-align:center;font-size:13px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
@@ -94,9 +94,10 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="header" id="header">
     <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
     <div class="subtotal-row" id="subtotalRow">
-        소계 <span class="subtotal-val" id="subtotalVal">0</span>
+        <div style="color:#888;font-size:12px">소계</div>
+        <span class="subtotal-val" id="subtotalVal">0</span>
     </div>
-    <div class="total-label">합계</div>
+    <div class="total-label">합산</div>
     <div class="total-val" id="totalVal">0</div>
     <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
 </div>
@@ -523,14 +524,18 @@ function renderSettle(){
         }
     });
     const included=items.filter(u=>!u.excluded);
+    const todayIncluded=included.filter(u=>dateFmt(u.date)===dateFmt(now.getTime()));
+    const todayIn=todayIncluded.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
+    const todayOut=todayIncluded.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
+    const todayPredicted=currentBalance+todayIn-todayOut;
     const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
     const expectedOut=included.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
     const predicted=currentBalance+expectedIn-expectedOut;
     const exCnt=items.filter(u=>u.excluded).length;
 
     sum.innerHTML=`<div class="summary-row">
-        <div class="summary-box"><div class="summary-label">현재</div><div class="summary-val" style="font-size:18px">${fmt(currentBalance)}</div></div>
-        <div class="summary-box"><div class="summary-label">예상 30일</div><div class="summary-val" style="font-size:16px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">오늘 예상</div><div class="summary-val" style="font-size:18px;color:${todayPredicted>=0?'#4fc3f7':'#ef5350'}">${fmt(todayPredicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">30일 예상</div><div class="summary-val" style="font-size:14px;color:${predicted>=0?'#888':'#ef5350'}">${fmt(predicted)}</div></div>
     </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
 
     // 날짜 지난 미지출 항목 → 오늘로 이월

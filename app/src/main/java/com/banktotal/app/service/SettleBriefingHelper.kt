@@ -28,9 +28,24 @@ object SettleBriefingHelper {
     private const val FB = "https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app"
     private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     private val fmt = DecimalFormat("#,###")
+    private const val COOLDOWN_MS = 180_000L // 3분 쿨다운
+    private var lastBriefingTime = 0L
+    private var pendingParsed: ParsedTransaction? = null
 
     suspend fun show(context: Context, parsed: ParsedTransaction) = withContext(Dispatchers.IO) {
         try {
+            // 쿨다운: 3분 이내 연속 거래 → 마지막 건만 브리핑 (주유소 선승인 등)
+            val now = System.currentTimeMillis()
+            if (now - lastBriefingTime < COOLDOWN_MS) {
+                pendingParsed = parsed
+                LogWriter.sys("정산 브리핑: 쿨다운 (${(COOLDOWN_MS - (now - lastBriefingTime)) / 1000}초 남음)")
+                // 쿨다운 끝나면 마지막 건으로 브리핑
+                kotlinx.coroutines.delay(COOLDOWN_MS - (now - lastBriefingTime) + 500)
+                if (pendingParsed != parsed) return@withContext // 더 새로운 거래가 있으면 스킵
+            }
+            lastBriefingTime = System.currentTimeMillis()
+            pendingParsed = null
+
             createChannel(context)
 
             val apiKey = GeminiService.getApiKey()

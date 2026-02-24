@@ -524,23 +524,25 @@ function renderSettle(){
     // 전각→반각 정규화 (은행마다 （）vs() 등 표기 다름)
     function normCP(s){return s.replace(/[\uff08]/g,'(').replace(/[\uff09]/g,')').replace(/[\u3000\uff10-\uff5a]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/\u3000/g,' ');}
     items.forEach(u=>{
-        if(u.name==='SFA'){
-            u.isBlock=true;
+        if(u.name==='물류'||u.name==='SFA'){
             const dk=dateFmt(u.date);
-            // sfa_daily에 해당 날짜 초기값이 있으면 사용 (0→비제로 전환 시점 캡처값)
             const ymd=new Date(u.date);
             const dailyKey=ymd.getFullYear()+'-'+(ymd.getMonth()+1).toString().padStart(2,'0')+'-'+ymd.getDate().toString().padStart(2,'0');
             if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount>0){
+                // sfa_daily 확인됨 → SFA로 전환, 실제 금액 사용
+                u.name='SFA';
                 u.amount=sfaDaily[dailyKey].amount;
+                u.isBlock=true;
+                // 제네시스 출금 차감
+                const genTotal=transactions.filter(t=>{
+                    if(t.type!=='출금')return false;
+                    const cp=normCP((t.counterparty||'').toLowerCase());
+                    if(!genesisKeywords.some(k=>cp.includes(k.toLowerCase())))return false;
+                    return dateFmt(t.ts)===dk;
+                }).reduce((s,t)=>s+(t.amount||0),0);
+                if(genTotal>0)u.amount=Math.max(0,u.amount-genTotal);
             }
-            // 해당 날짜의 제네시스 출금 합산하여 SFA에서 차감
-            const genTotal=transactions.filter(t=>{
-                if(t.type!=='출금')return false;
-                const cp=normCP((t.counterparty||'').toLowerCase());
-                if(!genesisKeywords.some(k=>cp.includes(k.toLowerCase())))return false;
-                return dateFmt(t.ts)===dk;
-            }).reduce((s,t)=>s+(t.amount||0),0);
-            if(genTotal>0)u.amount=Math.max(0,u.amount-genTotal);
+            // sfa_daily 없으면 물류 300만 그대로 표시
         }
     });
     const included=items.filter(u=>!u.excluded);

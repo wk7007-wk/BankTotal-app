@@ -602,10 +602,15 @@ ${txList}
 [월 고정비 목록]
 ${settleList}
 
-고정비 중 금액이 0이거나, 새 거래와 매칭되어 금액 보정이 필요한 항목만 JSON으로 응답.
-보정 불필요하면 빈 배열 [].
-[{"name":"항목명","amount":보정금액}, ...]
-순수 JSON만. 설명 없이.`;
+[규칙]
+1. 금액: 0원이거나 실제 거래와 다르면 보정
+2. 날짜: 공휴일/주말로 1~2일 밀린 거래는 날짜 변경하지 마세요 (정상)
+3. 날짜: 고지서/청구서/납부안내에서 확정 납부일이 명시된 경우에만 dayOfMonth 변경
+4. 보정 불필요하면 빈 배열 []
+
+응답 형식 (순수 JSON만, 설명 없이):
+[{"name":"항목명","amount":보정금액,"dayOfMonth":확정일(선택)}]
+dayOfMonth는 확정일 발견 시에만 포함.`;
 
     fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key,{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -619,14 +624,25 @@ ${settleList}
             let updated=0;
             const changes=[];
             matches.forEach(m=>{
-                if(!m.amount||m.amount<=0)return;
                 const item=candidates.find(c=>c.name===m.name);
-                if(!item||item.amount===m.amount)return;
-                const prev=item.amount;
-                fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify({amount:m.amount})});
-                changes.push(item.name+': '+(prev?fmt(prev):'0')+'→'+fmt(m.amount)+'원');
-                item.amount=m.amount;
-                updated++;
+                if(!item)return;
+                const patch={};
+                let desc=item.name+':';
+                if(m.amount&&m.amount>0&&item.amount!==m.amount){
+                    patch.amount=m.amount;
+                    desc+=' '+(item.amount?fmt(item.amount):'0')+'→'+fmt(m.amount)+'원';
+                    item.amount=m.amount;
+                }
+                if(m.dayOfMonth&&m.dayOfMonth!==item.dayOfMonth){
+                    patch.dayOfMonth=m.dayOfMonth;
+                    desc+=' 날짜'+item.dayOfMonth+'→'+m.dayOfMonth+'일(확정)';
+                    item.dayOfMonth=m.dayOfMonth;
+                }
+                if(Object.keys(patch).length){
+                    fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify(patch)});
+                    changes.push(desc);
+                    updated++;
+                }
             });
             if(updated>0){
                 renderSettle();

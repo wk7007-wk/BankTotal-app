@@ -504,8 +504,22 @@ function renderSettle(){
             if(u.name==='SFA'&&dateFmt(u.date)===todayDk){u.amount=bAmt;u.isBlock=true;}
         });
     }
-    // SFA 항목 핑크색 표시
-    items.forEach(u=>{if(u.name==='SFA')u.isBlock=true;});
+    // SFA 항목 핑크색 표시 + 제네시스 출금분 차감
+    const genesisKeywords=['제네시스','genesis','GENESIS'];
+    items.forEach(u=>{
+        if(u.name==='SFA'){
+            u.isBlock=true;
+            // 해당 날짜의 제네시스 출금 합산하여 SFA에서 차감
+            const dk=dateFmt(u.date);
+            const genTotal=transactions.filter(t=>{
+                if(t.type!=='출금')return false;
+                const cp=(t.counterparty||'').toLowerCase();
+                if(!genesisKeywords.some(k=>cp.includes(k.toLowerCase())))return false;
+                return dateFmt(t.ts)===dk;
+            }).reduce((s,t)=>s+(t.amount||0),0);
+            if(genTotal>0)u.amount=Math.max(0,u.amount-genTotal);
+        }
+    });
     const included=items.filter(u=>!u.excluded);
     const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
     const expectedOut=included.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);

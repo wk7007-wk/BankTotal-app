@@ -62,6 +62,8 @@ class BankNotificationListenerService : NotificationListenerService() {
             val repository = AccountRepository(applicationContext)
             CoroutineScope(Dispatchers.IO).launch {
                 repository.upsertFromSms(parsed)
+                // 정산 브리핑 알림 (DB 저장 후 소계 반영된 상태에서)
+                SettleBriefingHelper.show(applicationContext, parsed)
             }
             return
         }

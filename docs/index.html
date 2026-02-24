@@ -206,7 +206,7 @@ function showTab(name){
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
     if(name==='perms')renderPermissions();
-    if(name==='settle'){renderSettle();autoCorrectSettleAmounts();}
+    if(name==='settle')renderSettle();
 }
 
 // --- Firebase SSE ---
@@ -224,8 +224,15 @@ function initSSE(){
     connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
+        const prev=transactions.length;
         transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLedger();
+        // 새 출금 거래 발생 시 AI 보정 체크
+        if(transactions.length>prev&&prev>0){
+            const newTxs=transactions.slice(0,transactions.length-prev);
+            const newOut=newTxs.filter(t=>t.type==='출금');
+            if(newOut.length)checkSettleCorrection(newOut);
+        }
     });
     connectSSE('/banktotal/logs',d=>{
         if(!d){logs=[];renderLogs();return;}
@@ -235,7 +242,6 @@ function initSSE(){
     connectSSE('/banktotal/settle/manual',d=>{
         settleManual=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
         if(currentTab==='settle')renderSettle();
-        autoCorrectSettleAmounts();
     });
     connectSSE('/banktotal/settle/auto',d=>{
         settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
@@ -573,41 +579,33 @@ function editSettleAmount(id,cur){
     renderSettle();
 }
 
-// --- AI 자동 금액 보정: 0원 항목을 가계부 거래내역과 매칭 ---
-// 월 1회 실행 (전달 거래 기준)
-function autoCorrectSettleAmounts(){
-    const runKey='autoCorrect_'+new Date().getFullYear()+'_'+new Date().getMonth();
-    if(localStorage.getItem(runKey))return;
-    const zeroItems=settleManual.filter(m=>!m.amount||m.amount===0);
-    if(!zeroItems.length)return;
-    if(!transactions.length)return;
+// --- AI 자동 금액 보정: 새 출금 발생 시 고정비 매칭 판단 ---
+let _correctCooldown=0;
+function checkSettleCorrection(newOutTxs){
+    // 쿨다운 5분
+    if(Date.now()-_correctCooldown<300000)return;
+    // 0원 항목 또는 금액 차이 큰 항목 대상
+    const candidates=settleManual.filter(m=>m.cycle==='monthly');
+    if(!candidates.length)return;
     const key=loadAiKey();
     if(!key)return;
-    localStorage.setItem(runKey,'1');
+    _correctCooldown=Date.now();
 
-    // 최근 90일 거래 수집
-    const cutoff=Date.now()-90*86400000;
-    const recent=transactions.filter(t=>t.ts>cutoff&&t.type==='출금');
-    // 거래 요약: 이름별 최근 금액들
-    const txSummary={};
-    recent.forEach(t=>{
-        const cp=t.counterparty||t.bank||'';
-        if(!cp)return;
-        if(!txSummary[cp])txSummary[cp]=[];
-        txSummary[cp].push(t.amount);
-    });
+    const txList=newOutTxs.map(t=>(t.counterparty||t.bank||'')+' '+t.amount+'원').join('\n');
+    const settleList=candidates.map(c=>c.name+' (매월'+c.dayOfMonth+'일, 현재:'+c.amount+'원)').join('\n');
 
-    const prompt=`다음은 월 고정비 항목(금액 0원, 미확인)과 최근 실제 출금 내역입니다.
-고정비 이름과 거래내역을 매칭하여 금액을 추정하세요.
+    const prompt=`새로 발생한 출금 거래와 월 고정비 항목을 비교하세요.
 
-[고정비 항목 (금액 미확인)]
-${zeroItems.map(z=>z.name+' (매월 '+z.dayOfMonth+'일)').join('\n')}
+[새 출금 거래]
+${txList}
 
-[최근 출금 내역 - 이름: 금액들]
-${Object.entries(txSummary).map(([k,v])=>k+': '+v.join(', ')).join('\n')}
+[월 고정비 목록]
+${settleList}
 
-반드시 아래 JSON 배열만 응답. 매칭 안되면 amount:0 유지.
-[{"name":"항목명","amount":금액숫자}, ...]`;
+고정비 중 금액이 0이거나, 새 거래와 매칭되어 금액 보정이 필요한 항목만 JSON으로 응답.
+보정 불필요하면 빈 배열 [].
+[{"name":"항목명","amount":보정금액}, ...]
+순수 JSON만. 설명 없이.`;
 
     fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key,{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -617,22 +615,22 @@ ${Object.entries(txSummary).map(([k,v])=>k+': '+v.join(', ')).join('\n')}
         const clean=txt.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
         try{
             const matches=JSON.parse(clean);
-            if(!Array.isArray(matches))return;
+            if(!Array.isArray(matches)||!matches.length)return;
             let updated=0;
             const changes=[];
             matches.forEach(m=>{
                 if(!m.amount||m.amount<=0)return;
-                const item=zeroItems.find(z=>z.name===m.name);
-                if(!item)return;
+                const item=candidates.find(c=>c.name===m.name);
+                if(!item||item.amount===m.amount)return;
+                const prev=item.amount;
                 fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify({amount:m.amount})});
-                changes.push(item.name+' → '+fmt(m.amount)+'원');
+                changes.push(item.name+': '+(prev?fmt(prev):'0')+'→'+fmt(m.amount)+'원');
                 item.amount=m.amount;
                 updated++;
             });
             if(updated>0){
                 renderSettle();
-                // AI 채팅에 결과 표시
-                const msg='[자동보정] 거래내역 매칭 '+updated+'건\n'+changes.join('\n');
+                const msg='[자동보정] '+updated+'건 업데이트\n'+changes.join('\n');
                 const el=document.getElementById('aiMsgs');
                 if(el){
                     aiMessages.push({role:'ai',text:msg});

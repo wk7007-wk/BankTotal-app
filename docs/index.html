@@ -206,7 +206,7 @@ function showTab(name){
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
     if(name==='perms')renderPermissions();
-    if(name==='settle')renderSettle();
+    if(name==='settle'){renderSettle();autoCorrectSettleAmounts();}
 }
 
 // --- Firebase SSE ---
@@ -235,6 +235,7 @@ function initSSE(){
     connectSSE('/banktotal/settle/manual',d=>{
         settleManual=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
         if(currentTab==='settle')renderSettle();
+        autoCorrectSettleAmounts();
     });
     connectSSE('/banktotal/settle/auto',d=>{
         settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
@@ -570,6 +571,65 @@ function editSettleAmount(id,cur){
         }
     }
     renderSettle();
+}
+
+// --- AI 자동 금액 보정: 0원 항목을 가계부 거래내역과 매칭 ---
+let autoCorrectRan=false;
+function autoCorrectSettleAmounts(){
+    if(autoCorrectRan)return;
+    const zeroItems=settleManual.filter(m=>!m.amount||m.amount===0);
+    if(!zeroItems.length)return;
+    if(!transactions.length)return;
+    const key=loadAiKey();
+    if(!key)return;
+    autoCorrectRan=true;
+
+    // 최근 90일 거래 수집
+    const cutoff=Date.now()-90*86400000;
+    const recent=transactions.filter(t=>t.ts>cutoff&&t.type==='출금');
+    // 거래 요약: 이름별 최근 금액들
+    const txSummary={};
+    recent.forEach(t=>{
+        const cp=t.counterparty||t.bank||'';
+        if(!cp)return;
+        if(!txSummary[cp])txSummary[cp]=[];
+        txSummary[cp].push(t.amount);
+    });
+
+    const prompt=`다음은 월 고정비 항목(금액 0원, 미확인)과 최근 실제 출금 내역입니다.
+고정비 이름과 거래내역을 매칭하여 금액을 추정하세요.
+
+[고정비 항목 (금액 미확인)]
+${zeroItems.map(z=>z.name+' (매월 '+z.dayOfMonth+'일)').join('\n')}
+
+[최근 출금 내역 - 이름: 금액들]
+${Object.entries(txSummary).map(([k,v])=>k+': '+v.join(', ')).join('\n')}
+
+반드시 아래 JSON 배열만 응답. 매칭 안되면 amount:0 유지.
+[{"name":"항목명","amount":금액숫자}, ...]`;
+
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key='+key,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    }).then(r=>r.json()).then(d=>{
+        const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+        const clean=txt.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+        try{
+            const matches=JSON.parse(clean);
+            if(!Array.isArray(matches))return;
+            let updated=0;
+            matches.forEach(m=>{
+                if(!m.amount||m.amount<=0)return;
+                const item=zeroItems.find(z=>z.name===m.name);
+                if(!item)return;
+                // Firebase 업데이트
+                fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify({amount:m.amount})});
+                item.amount=m.amount;
+                updated++;
+            });
+            if(updated>0)renderSettle();
+        }catch(e){}
+    }).catch(()=>{});
 }
 
 function generateAllItems(manual,auto,days){

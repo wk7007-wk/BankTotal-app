@@ -487,7 +487,7 @@ document.addEventListener('touchend',function(e){
 function renderSettle(){
     const sum=document.getElementById('settleSummary');
     const el=document.getElementById('settleContent');
-    const currentBalance=Object.values(accounts).reduce((s,a)=>s+(a.balance||0),0);
+    const currentBalance=Object.values(accounts).reduce((s,a)=>s+((a.balance||0)>=0?(a.balance||0):0),0);
     const now=new Date();now.setHours(0,0,0,0);
     const dayNames=['일','월','화','수','목','금','토'];
 

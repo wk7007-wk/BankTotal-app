@@ -604,6 +604,11 @@ function renderSettle(){
         const isToday=i===0;
         const dayColor=d.getDay()===0?'#ef5350':d.getDay()===6?'#4fc3f7':'#888';
         if(dayItems.length){
+            // 날짜 헤더
+            const hdrBg=isToday?'#4fc3f722':'#ffffff08';
+            html+=`<div style="padding:6px 4px 2px;background:${hdrBg};border-top:1px solid #333;margin-top:2px">
+                <span style="font-size:12px;font-weight:bold;color:${dayColor}">${d.getMonth()+1}/${d.getDate()}(${dayName})${isToday?' 오늘':''}</span>
+            </div>`;
             dayItems.forEach((u,j)=>{
                 const isIn=u.type==='입금';
                 const delta=isIn?u.amount:-u.amount;
@@ -612,7 +617,7 @@ function renderSettle(){
                 const bg=u.excluded?'':u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'';
                 const amtC=isIn?'#4caf50':'#ef5350';
                 const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
-                const dl=j===0?`${dk}(${dayName})`:'';
+                const dl='';
                 const tag=u.isPending?' ⚡':'';
                 const stk=u.excluded?'text-decoration:line-through;':'';
                 html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}">

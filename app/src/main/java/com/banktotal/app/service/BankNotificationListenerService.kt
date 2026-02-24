@@ -118,7 +118,7 @@ class BankNotificationListenerService : NotificationListenerService() {
         val transactionType = if (isDeposit) "입금" else "출금"
 
         val amountRegex = if (isDeposit) {
-            Regex("""입금\s*([\d,]+)원?""")
+            Regex("""입금\s*([\d,]+)원?|금액\s*([\d,]+)원?""")
         } else {
             Regex("""출금\s*([\d,]+)원?|금액\s*([\d,]+)원?""")
         }

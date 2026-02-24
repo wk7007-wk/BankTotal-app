@@ -492,12 +492,16 @@ function renderSettle(){
     const dayNames=['일','월','화','수','목','금','토'];
 
     const items=generateAllItems(settleManual,settleAuto,30);
-    // BBQ BLOCK 금액을 오늘 항목으로 추가
-    const bbqAcc=Object.values(accounts).find(a=>(a.bankName||'').toUpperCase().includes('BBQ')||(a.displayName||'').toUpperCase().includes('BLOCK'));
-    if(bbqAcc&&bbqAcc.balance>0){
-        const bk='_block_today';
+    // BBQ SFA BLOCK 금액을 오늘 항목으로 추가 (마이너스 표기)
+    const bbqAcc=Object.values(accounts).find(a=>{
+        const bn=((a.bankName||'')+(a.bank||'')+(a.displayName||'')).toUpperCase();
+        return bn.includes('BBQ')||bn.includes('BLOCK')||bn.includes('SFA');
+    });
+    if(bbqAcc&&(bbqAcc.balance||0)!==0){
+        const bAmt=Math.abs(bbqAcc.balance);
+        const bk='_sfa_today';
         const st=ist(bk);
-        items.push({name:'BLOCK',amount:bbqAcc.balance,type:'출금',date:now.getTime(),_key:bk,_id:bk,isBlock:true,excluded:st.ex});
+        items.push({name:'SFA',amount:bAmt,type:'출금',date:now.getTime(),_key:bk,_id:bk,isBlock:true,excluded:st.ex});
     }
     const included=items.filter(u=>!u.excluded);
     const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);

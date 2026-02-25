@@ -576,6 +576,14 @@ function renderSettle(){
             else u.date=todayTs; // 출금만 오늘로 이월
         }
     });
+    // 중복 제거: 같은 날짜+같은 이름+같은 타입 → 최초 1건만 유지
+    const seenByDateName={};
+    for(let i=items.length-1;i>=0;i--){
+        const u=items[i];
+        const dk=dateFmt(u.date)+'_'+u.name+'_'+u.type;
+        if(seenByDateName[dk]){items.splice(i,1);}
+        else seenByDateName[dk]=true;
+    }
     // 날짜별 그룹 + 활성 상단, 제외 하단 정렬
     const upByDate={};
     items.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
@@ -800,8 +808,8 @@ function generateAllItems(manual,auto,days){
             result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,isPending:true,excluded:st.ex});
             return;
         }
-        // 과거 7일 포함 탐색 (weekly 이월 누락 방지: 어제 화요일 SFA 등)
-        const lookBack=(m.cycle==='weekly')?7:(m.cycle==='monthly')?7:0;
+        // 과거 1일만 탐색 (어제 미처리 이월용, 그 이전은 잔고에 이미 반영)
+        const lookBack=(m.cycle==='weekly'||m.cycle==='monthly')?1:0;
         for(let i=-lookBack;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;

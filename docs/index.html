@@ -688,16 +688,17 @@ ${txList}
 [월 고정비 목록]
 ${settleList}
 
-[규칙]
-1. 금액: 0원이거나 실제 거래와 다르면 보정
-2. 날짜: 공휴일/주말로 밀린 거래는 날짜 변경하지 마세요 (정상)
-3. 날짜: 미납 후 뒤늦게 출금된 거래도 날짜 변경하지 마세요 (정상 납부일 유지)
-4. 날짜: 고지서/청구서 원문에 "납부기한", "결제일" 등 확정일이 명시된 경우에만 dayOfMonth 변경
-4. 보정 불필요하면 빈 배열 []
+[핵심 규칙 — 반드시 준수]
+1. 매칭은 거래상대 이름과 항목명이 관련 있을 때만 (예: 미소금융→미소, KT→kt인터넷)
+2. 이름이 무관한 항목에 매칭 절대 금지 (예: 미소금융을 skylife에 매칭하면 안 됨)
+3. 확실한 매칭(이름 일치): confidence="high" → 자동 적용됨
+4. 불확실한 매칭(금액만 비슷): confidence="low" → 사용자에게 제안만
+5. 날짜: 공휴일/주말/미납 밀림은 변경하지 마세요
+6. 날짜: "납부기한", "결제일" 등 확정일이 원문에 있을 때만 dayOfMonth 변경
+7. 매칭 불가하면 빈 배열 []
 
 응답 형식 (순수 JSON만, 설명 없이):
-[{"name":"항목명","amount":보정금액,"dayOfMonth":확정일(선택)}]
-dayOfMonth는 확정일 발견 시에만 포함.`;
+[{"name":"항목명","amount":보정금액,"confidence":"high또는low","reason":"매칭근거","dayOfMonth":확정일(선택)}]`;
 
     fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -708,36 +709,54 @@ dayOfMonth는 확정일 발견 시에만 포함.`;
         try{
             const matches=JSON.parse(clean);
             if(!Array.isArray(matches)||!matches.length)return;
-            let updated=0;
-            const changes=[];
+            let autoApplied=0;
+            const autoChanges=[];
+            const suggestions=[];
             matches.forEach(m=>{
                 const item=candidates.find(c=>c.name===m.name);
                 if(!item)return;
+                const isHigh=m.confidence==='high';
                 const patch={};
                 let desc=item.name+':';
                 if(m.amount&&m.amount>0&&item.amount!==m.amount){
                     patch.amount=m.amount;
                     desc+=' '+(item.amount?fmt(item.amount):'0')+'→'+fmt(m.amount)+'원';
-                    item.amount=m.amount;
                 }
                 if(m.dayOfMonth&&m.dayOfMonth!==item.dayOfMonth){
                     patch.dayOfMonth=m.dayOfMonth;
-                    desc+=' 날짜'+item.dayOfMonth+'→'+m.dayOfMonth+'일(확정)';
-                    item.dayOfMonth=m.dayOfMonth;
+                    desc+=' 날짜'+item.dayOfMonth+'→'+m.dayOfMonth+'일';
                 }
-                if(Object.keys(patch).length){
+                if(!Object.keys(patch).length)return;
+                if(isHigh){
+                    // 확실한 매칭 → 자동 적용
+                    Object.assign(item,patch);
                     fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify(patch)});
-                    changes.push(desc);
-                    updated++;
+                    autoChanges.push('✓ '+desc+(m.reason?' ('+m.reason+')':''));
+                    autoApplied++;
+                }else{
+                    // 불확실 → 제안만 (버튼으로 수동 적용)
+                    suggestions.push({item,patch,desc:desc+(m.reason?' ('+m.reason+')':'')});
                 }
             });
-            if(updated>0){
+            const el=document.getElementById('aiMsgs');
+            if(autoApplied>0){
                 renderSettle();
-                const msg='[자동보정] '+updated+'건 업데이트\n'+changes.join('\n');
-                const el=document.getElementById('aiMsgs');
+                const msg='[자동보정] '+autoApplied+'건\n'+autoChanges.join('\n');
+                if(el){aiMessages.push({role:'ai',text:msg});renderAiMsgs();}
+            }
+            if(suggestions.length){
+                let msg='[보정 제안] 확인 후 적용하세요\n';
+                suggestions.forEach((s,i)=>{msg+=s.desc+'\n';});
+                aiMessages.push({role:'ai',text:msg});
+                // 각 제안에 적용 버튼 추가
+                renderAiMsgs();
                 if(el){
-                    aiMessages.push({role:'ai',text:msg});
-                    el.innerHTML+=`<div style="background:#1a3a1a;border:1px solid #2e7d32;border-radius:8px;padding:8px;margin:4px 0;font-size:12px;color:#81c784;white-space:pre-line">${msg}</div>`;
+                    let btns='';
+                    suggestions.forEach((s,i)=>{
+                        const pid='_sgst'+Date.now()+'_'+i;
+                        btns+=`<button id="${pid}" onclick="(function(){const p=${JSON.stringify(s.patch).replace(/"/g,'&quot;')};const id='${s.item._id}';fetch('${FB}/banktotal/settle/manual/'+id+'.json',{method:'PATCH',body:JSON.stringify(p)}).then(()=>{Object.assign(settleManual.find(x=>x._id===id)||{},p);renderSettle();document.getElementById('${pid}').textContent='적용됨';document.getElementById('${pid}').disabled=true;aiMessages.push({role:'ai',text:'✓ ${s.item.name} 보정 적용됨'});renderAiMsgs();});})()" style="margin:4px;padding:4px 12px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">${s.item.name} 적용</button>`;
+                    });
+                    el.innerHTML+=`<div style="padding:4px 8px">${btns}</div>`;
                     el.scrollTop=el.scrollHeight;
                 }
             }

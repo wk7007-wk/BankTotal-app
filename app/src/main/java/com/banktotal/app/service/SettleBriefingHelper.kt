@@ -68,9 +68,33 @@ object SettleBriefingHelper {
             val manual = fetchJson("$FB/banktotal/settle/manual.json")
             val sfaDay = fetchJson("$FB/banktotal/sfa_daily/$today.json")
             val rules = fetchText("$FB/banktotal/ai_rules/briefing.json")
+            val allTx = fetchJson("$FB/banktotal/transactions.json")
 
-            // 오늘 정산 항목 목록
-            val todayItems = mutableListOf<String>()
+            // 오늘 자정 기준 타임스탬프
+            val todayCal = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val todayStart = todayCal.timeInMillis
+
+            // 오늘 거래 추출
+            val todayTxList = mutableListOf<JSONObject>()
+            if (allTx != null) {
+                val txKeys = allTx.keys()
+                while (txKeys.hasNext()) {
+                    val tk = txKeys.next()
+                    val tx = allTx.optJSONObject(tk) ?: continue
+                    if (tx.optLong("ts", 0) >= todayStart) todayTxList.add(tx)
+                }
+            }
+            val todayWithdrawals = todayTxList.filter { it.optString("type") == "출금" }
+            val todayDeposits = todayTxList.filter { it.optString("type") == "입금" }
+            val todayOutTotal = todayWithdrawals.sumOf { it.optLong("amount", 0) }
+            val todayInTotal = todayDeposits.sumOf { it.optLong("amount", 0) }
+
+            // 오늘 정산 항목 목록 + 매칭 분석
+            data class SettleItem(val name: String, val type: String, val amount: Long, val cycle: String)
+            val todayItems = mutableListOf<SettleItem>()
             if (manual != null) {
                 val keys = manual.keys()
                 while (keys.hasNext()) {
@@ -94,9 +118,57 @@ object SettleBriefingHelper {
                         if (da > 0) amount = da
                     }
 
-                    todayItems.add("$name ${type} ${fmt.format(amount)}원")
+                    todayItems.add(SettleItem(name, type, amount, cycle))
                 }
             }
+
+            // 매칭: 오늘 출금과 정산 항목 비교 (금액 ±10% 범위)
+            val matched = mutableListOf<String>()
+            val unmatched = mutableListOf<String>()
+            val usedTx = mutableSetOf<Int>()
+            var remainOut = 0L
+            var expectIn = 0L
+
+            for (item in todayItems) {
+                if (item.type == "입금") {
+                    // 입금 항목: 오늘 입금에서 매칭 확인
+                    val matchTx = todayDeposits.withIndex().firstOrNull { (i, tx) ->
+                        i !in usedTx && kotlin.math.abs(tx.optLong("amount", 0) - item.amount) <= item.amount * 0.15
+                    }
+                    if (matchTx != null) {
+                        usedTx.add(matchTx.index)
+                        matched.add("✓ ${item.name} 입금 ${fmt.format(matchTx.value.optLong("amount",0))}원 (${item.amount.let { fmt.format(it) }}원 예정)")
+                    } else {
+                        unmatched.add("○ ${item.name} 입금 ${fmt.format(item.amount)}원 (미입금)")
+                        expectIn += item.amount
+                    }
+                } else {
+                    // 출금 항목: 오늘 출금에서 매칭 확인
+                    val matchTx = todayWithdrawals.withIndex().firstOrNull { (i, tx) ->
+                        i !in usedTx && kotlin.math.abs(tx.optLong("amount", 0) - item.amount) <= item.amount * 0.15
+                    }
+                    if (matchTx != null) {
+                        usedTx.add(matchTx.index)
+                        matched.add("✓ ${item.name} 출금 ${fmt.format(matchTx.value.optLong("amount",0))}원 (${item.amount.let { fmt.format(it) }}원 예정)")
+                    } else {
+                        unmatched.add("○ ${item.name} 출금 ${fmt.format(item.amount)}원 (미출금)")
+                        remainOut += item.amount
+                    }
+                }
+            }
+
+            // 미매칭 거래 (정산 항목에 없는 오늘 거래)
+            val unknownTx = mutableListOf<String>()
+            todayWithdrawals.withIndex().filter { it.index !in usedTx }.forEach {
+                unknownTx.add("? 출금 ${fmt.format(it.value.optLong("amount",0))}원 ${it.value.optString("counterparty","")}")
+            }
+            todayDeposits.withIndex().filter { it.index !in usedTx }.forEach {
+                unknownTx.add("? 입금 ${fmt.format(it.value.optLong("amount",0))}원 ${it.value.optString("counterparty","")}")
+            }
+
+            // 예상 잔고 계산
+            val expectedBalance = subtotal - remainOut + expectIn
+            val marginToNegative = subtotal - remainOut // 입금 미포함 최악 시나리오
 
             // 계좌 잔고 요약
             val acctSummary = accounts.filter { it.isActive }.joinToString(", ") {
@@ -108,14 +180,20 @@ object SettleBriefingHelper {
 2. 제네시스/genesis/올원오픈주/토스(주)제 → SFA 차감 거래
 3. 매칭되면 어떤 항목인지, 남은 금액 안내
 4. 매칭 안 되면 미확인 거래로 안내
-5. 소계 잔고와 오늘 예상 잔고 포함
-6. 한줄 요약 (40자 이내) + 상세 (3줄 이내)
+5. 한줄 요약 (40자 이내) + 상세 (5줄 이내)
+6. 상세에 반드시 포함: 예상잔고, 마이너스까지 여유, 매칭/미매칭 현황
 7. 응답 형식: {"title":"한줄요약","body":"상세내용"}
 8. 반드시 순수 JSON만 응답"""
 
             val ruleText = if (rules != "null" && rules.isNotEmpty()) {
                 rules.removeSurrounding("\"").replace("\\n", "\n")
             } else defaultRules
+
+            val matchSummary = buildString {
+                if (matched.isNotEmpty()) { appendLine("[매칭 완료]"); matched.forEach { appendLine(it) } }
+                if (unmatched.isNotEmpty()) { appendLine("[미처리]"); unmatched.forEach { appendLine(it) } }
+                if (unknownTx.isNotEmpty()) { appendLine("[미확인 거래]"); unknownTx.forEach { appendLine(it) } }
+            }
 
             val prompt = """당신은 정산 브리핑 AI입니다.
 
@@ -133,8 +211,20 @@ $ruleText
 소계(양수만): ${fmt.format(subtotal)}원
 $acctSummary
 
-[오늘($today ${dayName}요일) 정산 항목]
-${todayItems.joinToString("\n").ifEmpty { "없음" }}
+[오늘($today ${dayName}요일) 정산 현황]
+오늘 입금: ${fmt.format(todayInTotal)}원 (${todayDeposits.size}건)
+오늘 출금: ${fmt.format(todayOutTotal)}원 (${todayWithdrawals.size}건)
+남은 예정 출금: ${fmt.format(remainOut)}원
+남은 예정 입금: ${fmt.format(expectIn)}원
+
+[예상 잔고]
+현재 소계: ${fmt.format(subtotal)}원
+예상 잔고(입금 포함): ${fmt.format(expectedBalance)}원
+최악 잔고(입금 제외): ${fmt.format(marginToNegative)}원
+마이너스까지: ${if (marginToNegative > 0) "${fmt.format(marginToNegative)}원 여유" else "이미 부족 ${fmt.format(-marginToNegative)}원"}
+
+[매칭 상세]
+$matchSummary
 
 [SFA 오늘 초기값]
 ${if (sfaDay != null) "${fmt.format(sfaDay.optLong("amount", 0))}원" else "미설정"}

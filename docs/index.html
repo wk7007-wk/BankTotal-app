@@ -568,10 +568,13 @@ function renderSettle(){
         <div class="summary-box"><div class="summary-label">30일 예상</div><div class="summary-val" style="font-size:14px;color:${predicted>=0?'#888':'#ef5350'}">${fmt(predicted)}</div></div>
     </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
 
-    // 날짜 지난 미지출 항목 → 오늘로 이월
+    // 날짜 지난 항목 처리: 출금만 이월, 입금은 자동 제외 (잔고에 이미 반영)
     const todayTs=now.getTime();
     items.forEach(u=>{
-        if(u.date<todayTs&&!u.excluded)u.date=todayTs;
+        if(u.date<todayTs&&!u.excluded){
+            if(u.type==='입금'){u.excluded=true;u._autoExclude='이월삭제';}
+            else u.date=todayTs; // 출금만 오늘로 이월
+        }
     });
     // 날짜별 그룹 + 활성 상단, 제외 하단 정렬
     const upByDate={};
@@ -636,7 +639,7 @@ function renderSettle(){
                 const bg=u.excluded?'':stBg||(u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'');
                 const amtC=isIn?'#4caf50':'#ef5350';
                 const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
-                const tag=u.isPending?' ⚡':'';
+                const tag=u.isPending?' ⚡':u._autoExclude?' ('+u._autoExclude+')':'';
                 const stIcon=iSt==='confirmed'?'<span style="color:#4caf50;font-size:10px;margin-right:2px">●</span>':iSt==='pending'?'<span style="color:#ff9800;font-size:10px;margin-right:2px">●</span>':'';
                 const stk=u.excluded?'text-decoration:line-through;':'';
                 const cfBg=iSt==='confirmed'?'background:#4caf50;color:#fff;':'background:#333;color:#888;';
@@ -797,7 +800,9 @@ function generateAllItems(manual,auto,days){
             result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,isPending:true,excluded:st.ex});
             return;
         }
-        for(let i=0;i<days;i++){
+        // 과거 7일 포함 탐색 (weekly 이월 누락 방지: 어제 화요일 SFA 등)
+        const lookBack=(m.cycle==='weekly')?7:(m.cycle==='monthly')?7:0;
+        for(let i=-lookBack;i<days;i++){
             const d=new Date(now.getTime()+i*86400000);
             let match=false;
             if(m.cycle==='once'&&m.date){
@@ -812,10 +817,11 @@ function generateAllItems(manual,auto,days){
                 if((m.dayOfWeek||0)===0&&d.getDay()===6&&m.name==='물류'){match=true;}
             }
             if(match){
-                const key=m._id+'_'+i;
+                const key=m._id+'_'+(i<0?'p'+(-i):i);
                 const st=ist(key);
-                const newDay=Math.max(0,Math.min(29,i+st.sh));
-                const nd=new Date(now.getTime()+newDay*86400000);
+                const adjDay=Math.max(0,Math.min(29,i+st.sh));
+                const nd=new Date(now.getTime()+adjDay*86400000);
+                // 과거 항목은 이월 대상 (출금→오늘, 입금→자동제외는 renderSettle에서)
                 result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,excluded:st.ex});
             }
         }

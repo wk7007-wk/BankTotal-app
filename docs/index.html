@@ -1138,9 +1138,13 @@ async function executeAiAction(act){
     }
 }
 
+function delAiMsg(i){aiMessages.splice(i,1);renderAiMsgs();}
+function clearAiMsgs(){aiMessages=[];renderAiMsgs();}
 function renderAiMsgs(){
     const el=document.getElementById('aiMsgs');if(!el)return;
-    el.innerHTML=aiMessages.map(m=>`<div class="ai-msg ${m.role}">${m.text.replace(/\n/g,'<br>')}</div>`).join('');
+    let h=aiMessages.length>1?'<div style="text-align:right;padding:2px 4px"><span onclick="clearAiMsgs()" style="font-size:10px;color:#707088;cursor:pointer">전체삭제</span></div>':'';
+    h+=aiMessages.map((m,i)=>`<div class="ai-msg ${m.role}" style="position:relative">${m.text.replace(/\n/g,'<br>')}<span onclick="event.stopPropagation();delAiMsg(${i})" style="position:absolute;top:2px;right:6px;font-size:10px;color:#70708899;cursor:pointer">✕</span></div>`).join('');
+    el.innerHTML=h;
     el.scrollTop=el.scrollHeight;
 }
 

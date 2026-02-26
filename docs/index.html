@@ -172,9 +172,12 @@ let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={}
 const BT_DATA_VER='2';
 function lsCache(key,data){try{localStorage.setItem('bt_'+key,JSON.stringify(data))}catch(e){}}
 function lsLoad(key){try{const s=localStorage.getItem('bt_'+key);return s?JSON.parse(s):null}catch(e){return null}}
-let _localEditTs=0; // 로컬 수정 후 60초간 Firebase 덮어쓰기 방지
-function markLocalEdit(){_localEditTs=Date.now();}
-function isLocalEditRecent(){return Date.now()-_localEditTs<60000;}
+let _localEditTs=0; // 로컬 수정 후 300초간 Firebase 덮어쓰기 방지
+function markLocalEdit(){_localEditTs=Date.now();lsCache('_localEditTs',_localEditTs);}
+function isLocalEditRecent(){
+    if(!_localEditTs){const saved=lsLoad('_localEditTs');if(saved)_localEditTs=saved;}
+    return Date.now()-_localEditTs<300000;
+}
 function checkDataVersion(){
     const v=localStorage.getItem('bt_data_ver');
     if(v!==BT_DATA_VER){
@@ -299,16 +302,16 @@ function initSSE(){
     connectSSE('/banktotal/settle/manual',d=>{
         if(isLocalEditRecent())return; // 로컬 수정 직후 Firebase 덮어쓰기 방지
         const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
-        const hasLocal=lsLoad('settle_manual');
-        if(!hasLocal||_needsFirebaseSync){
-            settleManual=remote;
-            lsCache('settle_manual',settleManual);
-        }else{
-            // 로컬 있으면 Firebase의 새 항목만 추가 (기존 로컬값 보존)
-            const localIds=new Set(settleManual.map(m=>m._id));
-            remote.forEach(r=>{if(!localIds.has(r._id)){settleManual.push(r);localIds.add(r._id);}});
-            lsCache('settle_manual',settleManual);
-        }
+        // 항상 병합: 로컬 항목 절대 삭제 안 함 (데이터 손실 방지)
+        const remoteMap=new Map(remote.map(r=>[r._id,r]));
+        const localMap=new Map(settleManual.map(m=>[m._id,m]));
+        // 1) 로컬에 있는 항목: 로컬 값 유지 (Firebase가 덮어쓰지 않음)
+        // 2) Firebase에만 있는 새 항목: 추가
+        const merged=[...settleManual];
+        const mergedIds=new Set(merged.map(m=>m._id));
+        remote.forEach(r=>{if(!mergedIds.has(r._id)){merged.push(r);mergedIds.add(r._id);}});
+        settleManual=merged;
+        lsCache('settle_manual',settleManual);
         if(currentTab==='settle')renderSettle();
     });
     connectSSE('/banktotal/settle/auto',d=>{
@@ -1308,13 +1311,28 @@ async function executeAiAction(act){
         if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
         else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
         const id='sm_'+Date.now();
-        await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)});
+        // 1) 로컬 먼저 저장 (데이터 손실 방지)
+        entry._id=id;
+        settleManual.push(entry);
+        lsCache('settle_manual',settleManual);
+        markLocalEdit();
+        // 2) Firebase 백업
+        const {_id,...fbEntry}=entry;
+        await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbEntry)});
+        if(currentTab==='settle')renderSettle();
     }else if(act.act==='del'){
         const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
         for(const t of targets){
             await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'DELETE'});
         }
-        if(targets.length)aiMessages[aiMessages.length-1].text+=' ('+targets.length+'건 삭제)';
+        // 로컬에서도 삭제 + localStorage 저장
+        if(targets.length){
+            const delIds=new Set(targets.map(t=>t._id));
+            settleManual=settleManual.filter(m=>!delIds.has(m._id));
+            lsCache('settle_manual',settleManual);
+            markLocalEdit();
+            aiMessages[aiMessages.length-1].text+=' ('+targets.length+'건 삭제)';
+        }
     }else if(act.act==='add_rule'){
         const rules=aiRules.rules||[];
         rules.push(act.rule);

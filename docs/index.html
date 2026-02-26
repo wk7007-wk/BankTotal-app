@@ -44,7 +44,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .tx-cp{font-size:13px;color:#ccc}
 .tx-time{font-size:10px;color:#555}
 .tx-amount{font-size:15px;font-weight:bold;text-align:right}
-.tx-amount.in{color:#4caf50}
+.tx-amount.in{color:#4fc3f7}
 .tx-amount.out{color:#ef5350}
 .tx-balance{font-size:10px;color:#666;text-align:right}
 .tx-item.excluded{opacity:.35}
@@ -427,7 +427,7 @@ function renderLedger(){
     const totalIn=transactions.filter(t=>t.type==='입금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
     const totalOut=transactions.filter(t=>t.type==='출금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
     sum.innerHTML=`<div class="summary-row">
-        <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4caf50">+${fmt(totalIn)}</div></div>
+        <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4fc3f7">+${fmt(totalIn)}</div></div>
         <div class="summary-box"><div class="summary-label">출금</div><div class="summary-val" style="color:#ef5350">-${fmt(totalOut)}</div></div>
     </div>`;
 
@@ -442,7 +442,7 @@ function renderLedger(){
     let html='';
     for(const[date,txs]of Object.entries(grouped)){
         const dayTotal=txs.filter(t=>!t._excluded).reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
-        html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>=0?'#4caf50':'#ef5350'}">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span></div>`;
+        html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>=0?'#4fc3f7':'#ef5350'}">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span></div>`;
         txs.forEach(t=>{
             const isIn=t.type==='입금';
             const excCls=t._excluded?'excluded':'';
@@ -717,7 +717,7 @@ function renderSettle(){
                     </span>
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
                     <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer">${isIn?'+':'-'}${fmt(u.amount)}</span>
-                    <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
+                    <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#4fc3f7':'#ef5350'}">${fmt(bal)}</span>
                     <span onclick="deleteSettleItem('${u._id}')" style="font-size:10px;padding:2px 4px;margin-left:3px;color:#666;cursor:pointer">✕</span>
                 </div>`;
             });

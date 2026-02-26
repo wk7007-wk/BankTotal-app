@@ -103,9 +103,9 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 </div>
 
 <div class="tabs">
-    <div class="tab active" onclick="showTab('settle')">정산</div>
-    <div class="tab" onclick="showTab('accounts')">계좌</div>
-    <div class="tab" onclick="showTab('ledger')">가계부</div>
+    <div class="tab active" data-tab="settle" onclick="showTab('settle')">정산</div>
+    <div class="tab" data-tab="accounts" onclick="showTab('accounts')">계좌</div>
+    <div class="tab" data-tab="ledger" onclick="showTab('ledger')">가계부</div>
 </div>
 
 <div class="section" id="sec-accounts">
@@ -234,9 +234,9 @@ function markTransactions(txList){
 // --- 탭 관리 ---
 function showTab(name){
     currentTab=name;
-    document.querySelectorAll('.tab').forEach((t,i)=>{
-        const tabs=['settle','accounts','ledger'];
-        t.classList.toggle('active',tabs[i]===name||(name==='logs'&&i===2)||(name==='perms'&&i===2));
+    document.querySelectorAll('.tab').forEach(t=>{
+        const tn=t.getAttribute('data-tab')||'';
+        t.classList.toggle('active',tn===name||(name==='logs'&&tn==='settle')||(name==='perms'&&tn==='settle'));
     });
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
@@ -703,7 +703,7 @@ function renderSettle(){
                 const iSt=ist(u._key).st||'';
                 const stBg=iSt==='confirmed'?'background:#4caf5018;':iSt==='pending'?'background:#ff980018;':'';
                 const bg=u.excluded?'':stBg||(u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'');
-                const amtC=isIn?'#4caf50':'#ef5350';
+                const amtC=isIn?'#4fc3f7':'#ef5350';
                 const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
                 const tag=u.isPending?' ⚡':u._autoExclude?' ('+u._autoExclude+')':'';
                 const stIcon=iSt==='confirmed'?'<span style="color:#4caf50;font-size:10px;margin-right:2px">●</span>':iSt==='pending'?'<span style="color:#ff9800;font-size:10px;margin-right:2px">●</span>':'';

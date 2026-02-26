@@ -392,11 +392,19 @@ function renderAccounts(){
         document.getElementById('totalVal').textContent='0';
         return;
     }
-    let total=0;
-    list.forEach(a=>total+=a.balance||0);
+    let total=0,subtotal=0;
+    list.forEach(a=>{total+=a.balance||0;if((a.balance||0)>=0)subtotal+=a.balance||0;});
     const tvEl2=document.getElementById('totalVal');
     tvEl2.textContent=fmt(total);
     tvEl2.style.color=total>0?'#4fc3f7':total<0?'#ef5350':'#e0e0e0';
+    if(subtotal!==total){
+        document.getElementById('subtotalRow').classList.add('show');
+        const svEl=document.getElementById('subtotalVal');
+        svEl.textContent=fmt(subtotal);
+        svEl.style.color=subtotal>0?'#4fc3f7':subtotal<0?'#ef5350':'#e0e0e0';
+    }else{
+        document.getElementById('subtotalRow').classList.remove('show');
+    }
 
     const lastUp=Math.max(...list.map(a=>a.updated||0));
     document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
@@ -747,7 +755,7 @@ function renderSettle(){
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
                     <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
-                    <span onclick="deleteSettleItem('${u._id}')" style="font-size:10px;padding:2px 4px;margin-left:3px;color:#666;cursor:pointer">✕</span>
+                    <span onclick="toggleItem('${u._key}')" style="font-size:10px;padding:2px 4px;margin-left:3px;color:#666;cursor:pointer">✕</span>
                 </div>`;
             });
         }else{

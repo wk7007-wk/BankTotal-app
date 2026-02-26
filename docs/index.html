@@ -536,7 +536,7 @@ function renderSettle(){
             const dk=dateFmt(u.date);
             const ymd=new Date(u.date);
             const dailyKey=ymd.getFullYear()+'-'+(ymd.getMonth()+1).toString().padStart(2,'0')+'-'+ymd.getDate().toString().padStart(2,'0');
-            if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount>0){
+            if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount!=null){
                 // sfa_daily 확인됨 → SFA로 전환, 실제 금액 사용
                 u.name='SFA';
                 u.amount=sfaDaily[dailyKey].amount;
@@ -549,7 +549,7 @@ function renderSettle(){
                     if(!genesisKeywords.some(k=>cp.includes(k.toLowerCase())))return false;
                     return dateFmt(t.ts)===dk;
                 }).reduce((s,t)=>s+(t.amount||0),0);
-                if(genTotal>0)u.amount=Math.max(0,u.amount-genTotal);
+                if(genTotal>0)u.amount=u.amount-genTotal;
             }
             // sfa_daily 없으면 물류 300만 그대로 표시
         }
@@ -679,12 +679,19 @@ function renderSettle(){
 }
 
 function editSfaDaily(key,cur){
-    const v=prompt('SFA 초기 BLOCK 금액 수정 ('+key+')',cur||'');
-    if(v===null)return;
-    const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
+    // BBQ BLOCK 계좌에서 자동 동기화
+    const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
+    if(!blockAcct||blockAcct.balance===undefined){alert('BBQ BLOCK 계좌 데이터 없음');return;}
+    const amt=blockAcct.balance;
     fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
     sfaDaily[key]={amount:amt,ts:Date.now()};
     renderSettle();
+    // 동기화 피드백
+    const fb=document.createElement('div');
+    fb.textContent='SFA 동기화: '+fmt(amt);
+    fb.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#4fc3f7;color:#121212;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:999;';
+    document.body.appendChild(fb);
+    setTimeout(()=>fb.remove(),2000);
 }
 function editSettleAmount(id,cur){
     const v=prompt('금액 수정 (숫자만)',cur||'');

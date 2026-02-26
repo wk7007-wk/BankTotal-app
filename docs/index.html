@@ -235,7 +235,7 @@ function markTransactions(txList){
 function showTab(name){
     currentTab=name;
     document.querySelectorAll('.tab').forEach((t,i)=>{
-        const tabs=['accounts','ledger','settle'];
+        const tabs=['settle','accounts','ledger'];
         t.classList.toggle('active',tabs[i]===name||(name==='logs'&&i===2)||(name==='perms'&&i===2));
     });
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -834,23 +834,10 @@ ${settleList}
                     desc+=' 날짜'+item.dayOfMonth+'→'+m.dayOfMonth+'일';
                 }
                 if(!Object.keys(patch).length)return;
-                if(isHigh){
-                    // 확실한 매칭 → 자동 적용
-                    Object.assign(item,patch);
-                    fetch(FB+'/banktotal/settle/manual/'+item._id+'.json',{method:'PATCH',body:JSON.stringify(patch)});
-                    autoChanges.push('✓ '+desc+(m.reason?' ('+m.reason+')':''));
-                    autoApplied++;
-                }else{
-                    // 불확실 → 제안만 (버튼으로 수동 적용)
-                    suggestions.push({item,patch,desc:desc+(m.reason?' ('+m.reason+')':'')});
-                }
+                // 모든 보정은 사용자 확인 필요 (자동 적용 금지)
+                suggestions.push({item,patch,desc:desc+(m.reason?' ('+m.reason+')':'')});
             });
             const el=document.getElementById('aiMsgs');
-            if(autoApplied>0){
-                renderSettle();
-                const msg='[자동보정] '+autoApplied+'건\n'+autoChanges.join('\n');
-                if(el){aiMessages.push({role:'ai',text:msg});renderAiMsgs();}
-            }
             if(suggestions.length){
                 let msg='[보정 제안] 확인 후 적용하세요\n';
                 suggestions.forEach((s,i)=>{msg+=s.desc+'\n';});

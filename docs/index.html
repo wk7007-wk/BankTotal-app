@@ -682,7 +682,7 @@ function editSfaDaily(key,cur){
     // BBQ BLOCK 계좌에서 자동 동기화
     const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
     if(!blockAcct||blockAcct.balance===undefined){alert('BBQ BLOCK 계좌 데이터 없음');return;}
-    const amt=blockAcct.balance;
+    const amt=Math.abs(blockAcct.balance);
     fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
     sfaDaily[key]={amount:amt,ts:Date.now()};
     renderSettle();

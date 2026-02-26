@@ -541,6 +541,7 @@ function renderSettle(){
                 u.name='SFA';
                 u.amount=sfaDaily[dailyKey].amount;
                 u.isBlock=true;
+                u._sfaKey=dailyKey;
                 // 제네시스 출금 차감
                 const genTotal=transactions.filter(t=>{
                     if(t.type!=='출금')return false;
@@ -658,7 +659,7 @@ function renderSettle(){
                         <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
                     </span>
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span onclick="editSettleAmount('${u._id}',${u.amount})" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>=0?'#e0e0e0':'#ef5350'}">${fmt(bal)}</span>
                     <span onclick="deleteSettleItem('${u._id}')" style="font-size:10px;padding:2px 4px;margin-left:3px;color:#666;cursor:pointer">✕</span>
                 </div>`;
@@ -677,6 +678,14 @@ function renderSettle(){
     el.innerHTML=html;
 }
 
+function editSfaDaily(key,cur){
+    const v=prompt('SFA 초기 BLOCK 금액 수정 ('+key+')',cur||'');
+    if(v===null)return;
+    const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
+    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
+    sfaDaily[key]={amount:amt,ts:Date.now()};
+    renderSettle();
+}
 function editSettleAmount(id,cur){
     const v=prompt('금액 수정 (숫자만)',cur||'');
     if(v===null)return;

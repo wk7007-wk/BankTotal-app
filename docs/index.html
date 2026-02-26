@@ -283,10 +283,11 @@ function initSSE(){
         transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
         lsCache('transactions',d);
         renderLedger();
-        // 새 출금 거래 발생 시 AI 보정 체크
+        // 새 출금 거래 발생 시 AI 보정 체크 (SFA 매칭 거래 제외)
         if(transactions.length>prev&&prev>0){
+            const sfaNames=['제네시스','genesis','올원오픈주','토스(주)제','(주)제'];
             const newTxs=transactions.slice(0,transactions.length-prev);
-            const newOut=newTxs.filter(t=>t.type==='출금');
+            const newOut=newTxs.filter(t=>t.type==='출금'&&!sfaNames.some(s=>(t.counterparty||'').includes(s)));
             if(newOut.length)checkSettleCorrection(newOut);
         }
     });
@@ -798,11 +799,12 @@ ${settleList}
 [핵심 규칙 — 반드시 준수]
 1. 매칭은 거래상대 이름과 항목명이 관련 있을 때만 (예: 미소금융→미소, KT→kt인터넷)
 2. 이름이 무관한 항목에 매칭 절대 금지 (예: 미소금융을 skylife에 매칭하면 안 됨)
-3. 확실한 매칭(이름 일치): confidence="high" → 자동 적용됨
-4. 불확실한 매칭(금액만 비슷): confidence="low" → 사용자에게 제안만
+3. 금액만 비슷하고 이름이 다르면 매칭 금지
+4. 모든 매칭은 confidence="low" (사용자에게 제안만, 자동 적용 없음)
 5. 날짜: 공휴일/주말/미납 밀림은 변경하지 마세요
 6. 날짜: "납부기한", "결제일" 등 확정일이 원문에 있을 때만 dayOfMonth 변경
 7. 매칭 불가하면 빈 배열 []
+8. 0원 항목의 amount를 0으로 설정하는 보정은 절대 금지
 
 응답 형식 (순수 JSON만, 설명 없이):
 [{"name":"항목명","amount":보정금액,"confidence":"high또는low","reason":"매칭근거","dayOfMonth":확정일(선택)}]`;

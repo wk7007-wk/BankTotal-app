@@ -458,7 +458,7 @@ function renderLedger(){
             const tag=t._reason?`<span class="tx-excluded-tag">${t._reason}</span>`:'';
             html+=`<div class="tx-item ${excCls}">
                 <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}${tag}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
-                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance">잔액 ${fmt(t.balance)}</div></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance" style="color:${(t.balance||0)>0?'#4fc3f7':(t.balance||0)<0?'#ef5350':'#e0e0e0'}">잔액 ${fmt(t.balance)}</div></div>
             </div>`;
         });
         html+='</div>';
@@ -699,7 +699,7 @@ function renderSettle(){
     acctList.forEach(a=>{
         const bn=a.bankName||a.bank||'';
         const bal_=a.balance||0;
-        const c=bal_<0?'#ef5350':bal_>0?'#aaa':'#555';
+        const c=bal_>0?'#4fc3f7':bal_<0?'#ef5350':'#e0e0e0';
         html+=`<div style="display:flex;align-items:center;padding:3px 4px 3px 20px;border-bottom:1px solid #111">
             <span style="min-width:40px;font-size:10px;color:#555"></span>
             <span style="flex:1;font-size:11px;color:#666">${bn} ${a.account||a.accountNumber||''}</span>
@@ -755,7 +755,7 @@ function renderSettle(){
                 <span style="min-width:40px;font-size:11px;color:${dayColor}">${dk.slice(5)}</span>
                 <span style="flex:1;font-size:11px;color:${dayColor}">(${dayName})</span>
                 <span style="min-width:55px"></span>
-                <span style="min-width:60px;text-align:right;font-size:13px;color:#555">${fmt(bal)}</span>
+                <span style="min-width:60px;text-align:right;font-size:13px;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
                 <span style="min-width:18px"></span>
             </div>`;
         }

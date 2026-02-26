@@ -35,6 +35,15 @@ class BlockAmountAccessibilityService : AccessibilityService() {
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.KOREA)
     private var lastDumpTime = 0L
 
+    // 중복 저장 방지
+    private var lastSavedAmount = -1L
+    private var lastSaveTime = 0L
+    private val SAVE_DEBOUNCE_MS = 30_000L // 30초 내 동일 금액 스킵
+
+    @Volatile private var periodicRunning = false
+    private var periodicThread: Thread? = null
+    private val PERIODIC_INTERVAL = 60_000L // 60초마다 강제 읽기
+
     override fun onServiceConnected() {
         instance = this
         serviceInfo = serviceInfo.apply {
@@ -42,8 +51,55 @@ class BlockAmountAccessibilityService : AccessibilityService() {
                     AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 500
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
         log("접근성 서비스 연결됨")
+        startPeriodicCheck()
+    }
+
+    /** 60초마다 SFA 앱 윈도우를 직접 탐색하여 금액 읽기 (이벤트 없이도 동작) */
+    private fun startPeriodicCheck() {
+        if (periodicRunning) return
+        periodicRunning = true
+        periodicThread = kotlin.concurrent.thread(name = "BlockAmountChecker") {
+            log("주기적 BLOCK 금액 체크 시작")
+            while (periodicRunning) {
+                try {
+                    Thread.sleep(PERIODIC_INTERVAL)
+                    if (!periodicRunning) break
+                    tryReadFromWindows()
+                } catch (_: InterruptedException) { break }
+                catch (e: Exception) { Log.w(TAG, "주기적 체크 오류: ${e.message}") }
+            }
+        }
+    }
+
+    /** windows API로 SFA 앱 윈도우 직접 탐색 */
+    private fun tryReadFromWindows() {
+        try {
+            val sfaRoot = windows?.firstOrNull { w ->
+                w.root?.packageName?.toString() == BBQ_PACKAGE
+            }?.root ?: return
+
+            val amount = findBlockAmountInTree(sfaRoot)
+            sfaRoot.recycle()
+
+            if (amount != null && amount > 0) {
+                val now = System.currentTimeMillis()
+                if (amount == lastSavedAmount && now - lastSaveTime < SAVE_DEBOUNCE_MS) return
+                lastSavedAmount = amount
+                lastSaveTime = now
+
+                log("BBQ BLOCK 금액(주기): ${amount}원 → DB 저장")
+                CoroutineScope(Dispatchers.IO).launch {
+                    val repo = AccountRepository(applicationContext)
+                    repo.upsertBlockAmount("BBQ", amount)
+                    saveDailyInitialSfa(amount)
+                }
+            }
+        } catch (e: Exception) {
+            // SFA 앱이 없으면 무시 (정상)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -60,12 +116,17 @@ class BlockAmountAccessibilityService : AccessibilityService() {
             // WebView라 findByText 안 됨 → 트리 직접 탐색
             val amount = findBlockAmountInTree(root)
             if (amount != null && amount > 0) {
+                val now = System.currentTimeMillis()
+                // 30초 내 동일 금액 → 스킵 (중복 이벤트 방지)
+                if (amount == lastSavedAmount && now - lastSaveTime < SAVE_DEBOUNCE_MS) return
+                lastSavedAmount = amount
+                lastSaveTime = now
+
                 log("BBQ BLOCK 금액: ${amount}원 → DB 저장")
                 LogWriter.tx("BBQ BLOCK 감지: ${amount}원")
                 CoroutineScope(Dispatchers.IO).launch {
                     val repo = AccountRepository(applicationContext)
                     repo.upsertBlockAmount("BBQ", amount)
-                    // 당일 최초 감지 시 SFA 일일 초기값 저장
                     saveDailyInitialSfa(amount)
                 }
             }
@@ -199,11 +260,15 @@ class BlockAmountAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         log("접근성 서비스 중단됨")
+        periodicRunning = false
+        periodicThread?.interrupt()
         instance = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        periodicRunning = false
+        periodicThread?.interrupt()
         instance = null
     }
 }

@@ -168,10 +168,33 @@ const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStar
 
 let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},sfaDaily={},currentTab='settle',ledgerMode='out',logFilterTag='all';
 
-// --- localStorage 캐시 (새로고침 시 데이터 보존) ---
+// --- localStorage = 주 데이터 / Firebase = 백업 ---
+const BT_DATA_VER='2';
 function lsCache(key,data){try{localStorage.setItem('bt_'+key,JSON.stringify(data))}catch(e){}}
 function lsLoad(key){try{const s=localStorage.getItem('bt_'+key);return s?JSON.parse(s):null}catch(e){return null}}
+let _localEditTs=0; // 로컬 수정 후 60초간 Firebase 덮어쓰기 방지
+function markLocalEdit(){_localEditTs=Date.now();}
+function isLocalEditRecent(){return Date.now()-_localEditTs<60000;}
+function checkDataVersion(){
+    const v=localStorage.getItem('bt_data_ver');
+    if(v!==BT_DATA_VER){
+        // 버전 변경 → 기존 로컬 데이터 백업
+        const backup={};
+        ['accounts','transactions','settle_manual','sfa_daily','settleItemState'].forEach(k=>{
+            const d=localStorage.getItem('bt_'+k)||localStorage.getItem(k);
+            if(d)backup[k]=d;
+        });
+        if(Object.keys(backup).length){
+            localStorage.setItem('bt_backup_v'+(v||'1'),JSON.stringify(backup));
+        }
+        localStorage.setItem('bt_data_ver',BT_DATA_VER);
+        return true; // 1회 Firebase 동기화 허용
+    }
+    return false;
+}
+let _needsFirebaseSync=false;
 function loadCachedData(){
+    _needsFirebaseSync=checkDataVersion();
     const ca=lsLoad('accounts');if(ca){accounts=ca;renderAccounts();}
     const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.values(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
     const cm=lsLoad('settle_manual');if(cm){settleManual=cm;}
@@ -273,8 +296,18 @@ function initSSE(){
         renderLogs();
     });
     connectSSE('/banktotal/settle/manual',d=>{
-        settleManual=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
-        lsCache('settle_manual',settleManual);
+        if(isLocalEditRecent())return; // 로컬 수정 직후 Firebase 덮어쓰기 방지
+        const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+        const hasLocal=lsLoad('settle_manual');
+        if(!hasLocal||_needsFirebaseSync){
+            settleManual=remote;
+            lsCache('settle_manual',settleManual);
+        }else{
+            // 로컬 있으면 Firebase의 새 항목만 추가 (기존 로컬값 보존)
+            const localIds=new Set(settleManual.map(m=>m._id));
+            remote.forEach(r=>{if(!localIds.has(r._id)){settleManual.push(r);localIds.add(r._id);}});
+            lsCache('settle_manual',settleManual);
+        }
         if(currentTab==='settle')renderSettle();
     });
     connectSSE('/banktotal/settle/auto',d=>{
@@ -282,8 +315,17 @@ function initSSE(){
         if(currentTab==='settle')renderSettle();
     });
     connectSSE('/banktotal/sfa_daily',d=>{
-        sfaDaily=d||{};
-        lsCache('sfa_daily',sfaDaily);
+        if(isLocalEditRecent())return; // 로컬 수정 직후 Firebase 덮어쓰기 방지
+        const hasLocal=lsLoad('sfa_daily');
+        if(!hasLocal||_needsFirebaseSync){
+            sfaDaily=d||{};
+            lsCache('sfa_daily',sfaDaily);
+        }else{
+            // 새 날짜 항목만 병합 (기존 로컬값 보존)
+            const remote=d||{};
+            Object.keys(remote).forEach(k=>{if(!sfaDaily[k])sfaDaily[k]=remote[k];});
+            lsCache('sfa_daily',sfaDaily);
+        }
         if(currentTab==='settle')renderSettle();
     });
     fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
@@ -697,8 +739,10 @@ function editSfaDaily(key,cur){
     const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
     if(!blockAcct||blockAcct.balance===undefined){alert('BBQ BLOCK 계좌 데이터 없음');return;}
     const amt=Math.abs(blockAcct.balance);
-    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
+    markLocalEdit();
     sfaDaily[key]={amount:amt,ts:Date.now()};
+    lsCache('sfa_daily',sfaDaily);
+    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
     renderSettle();
     // 동기화 피드백
     const fb=document.createElement('div');
@@ -710,12 +754,14 @@ function editSfaDaily(key,cur){
 function editSettleAmount(id,cur){
     const v=prompt('금액 수정 (숫자만)',cur||'');
     if(v===null)return;
+    markLocalEdit();
     const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
     // Firebase에서 manual/auto 구분해서 업데이트
     const mIdx=settleManual.findIndex(m=>m._id===id);
     if(mIdx>=0){
         fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PATCH',body:JSON.stringify({amount:amt})});
         settleManual[mIdx].amount=amt;
+        lsCache('settle_manual',settleManual);
     }else{
         const aIdx=settleAuto.findIndex(a=>a._id===id);
         if(aIdx>=0){
@@ -1231,13 +1277,26 @@ function renderAiMsgs(){
     el.scrollTop=el.scrollHeight;
 }
 
-// --- 새로고침 ---
+// --- 새로고침 (로컬 데이터 보존 + Firebase 최신값 병합) ---
 function doRefresh(){
     const btn=document.getElementById('refreshBtn');
     btn.classList.add('spinning');
     setTimeout(()=>btn.classList.remove('spinning'),600);
-    // 웹페이지 자체를 최신 버전으로 리로드
-    location.reload(true);
+    // 1) 현재 데이터를 localStorage에 백업
+    lsCache('accounts',accounts);
+    lsCache('settle_manual',settleManual);
+    lsCache('sfa_daily',sfaDaily);
+    if(transactions.length)lsCache('transactions_raw',transactions);
+    // 2) Firebase에서 계좌/거래만 최신 갱신 (settle/SFA는 로컬 유지)
+    fetch(FB+'/banktotal/accounts.json').then(r=>r.json()).then(d=>{
+        if(d){accounts=d;lsCache('accounts',accounts);renderAccounts();if(currentTab==='settle')renderSettle();}
+    }).catch(()=>{});
+    fetch(FB+'/banktotal/transactions.json').then(r=>r.json()).then(d=>{
+        if(d){transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));lsCache('transactions',d);renderLedger();}
+    }).catch(()=>{});
+    fetch(FB+'/banktotal/logs.json').then(r=>r.json()).then(d=>{
+        if(d){logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLogs();}
+    }).catch(()=>{});
 }
 
 // --- 초기화 ---

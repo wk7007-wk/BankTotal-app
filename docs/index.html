@@ -13,9 +13,9 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .refresh-btn.spinning{animation:spin .6s linear}
 .subtotal-row{color:#fff;font-size:14px;margin-bottom:2px;display:none}
 .subtotal-row.show{display:block}
-.subtotal-val{font-size:32px;font-weight:bold;color:#fff}
+.subtotal-val{font-size:32px;font-weight:bold;color:#4fc3f7}
 .total-label{color:#666;font-size:12px;margin-top:4px}
-.total-val{font-size:16px;color:#888;margin:2px 0}
+.total-val{font-size:16px;color:#4fc3f7;margin:2px 0}
 .last-update{color:#666;font-size:12px}
 .tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:0;z-index:9}
 .tab{flex:1;min-width:70px;padding:14px 12px;text-align:center;font-size:14px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
@@ -350,10 +350,14 @@ function renderNativeAccounts(list){
     list.forEach(a=>{
         if(a.isActive){total+=a.balance;if(a.balance>=0)subtotal+=a.balance;}
     });
-    document.getElementById('totalVal').textContent=fmt(total);
+    const tvEl=document.getElementById('totalVal');
+    tvEl.textContent=fmt(total);
+    tvEl.style.color=total>=0?'#4fc3f7':'#ef5350';
     if(subtotal!==total){
         document.getElementById('subtotalRow').classList.add('show');
-        document.getElementById('subtotalVal').textContent=fmt(subtotal);
+        const svEl=document.getElementById('subtotalVal');
+        svEl.textContent=fmt(subtotal);
+        svEl.style.color=subtotal>=0?'#4fc3f7':'#ef5350';
     }else{
         document.getElementById('subtotalRow').classList.remove('show');
     }
@@ -386,7 +390,9 @@ function renderAccounts(){
     }
     let total=0;
     list.forEach(a=>total+=a.balance||0);
-    document.getElementById('totalVal').textContent=fmt(total);
+    const tvEl2=document.getElementById('totalVal');
+    tvEl2.textContent=fmt(total);
+    tvEl2.style.color=total>=0?'#4fc3f7':'#ef5350';
 
     const lastUp=Math.max(...list.map(a=>a.updated||0));
     document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
@@ -623,7 +629,7 @@ function renderSettle(){
 
     sum.innerHTML=`<div class="summary-row">
         <div class="summary-box"><div class="summary-label">오늘 예상</div><div class="summary-val" style="font-size:18px;color:${todayPredicted>=0?'#4fc3f7':'#ef5350'}">${fmt(todayPredicted)}</div></div>
-        <div class="summary-box"><div class="summary-label">30일 예상</div><div class="summary-val" style="font-size:14px;color:${predicted>=0?'#888':'#ef5350'}">${fmt(predicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">30일 예상</div><div class="summary-val" style="font-size:14px;color:${predicted>=0?'#4fc3f7':'#ef5350'}">${fmt(predicted)}</div></div>
     </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
 
     // confirmed 당일 출금 → 자동 제외 (이미 출금되어 잔고에 반영됨, 이중 차감 방지)
@@ -720,7 +726,7 @@ function renderSettle(){
                 if(!u.excluded)bal+=delta;
                 const op=u.excluded?'opacity:.35;':'';
                 const iSt=ist(u._key).st||'';
-                const stBg=iSt==='confirmed'?'background:#4caf5018;':iSt==='pending'?'background:#ff980018;':'';
+                const stBg=iSt==='confirmed'?'background:#4fc3f718;':iSt==='pending'?'background:#ff980018;':'';
                 const bg=u.excluded?'':stBg||(u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'');
                 const amtC=isIn?'#4fc3f7':'#ef5350';
                 const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';

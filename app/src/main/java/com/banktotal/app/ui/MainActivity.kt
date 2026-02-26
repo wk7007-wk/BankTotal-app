@@ -211,6 +211,30 @@ class MainActivity : AppCompatActivity() {
                 } else ""
             } catch (e: Exception) { "" }
         }
+        @JavascriptInterface
+        fun captureScreen() {
+            runOnUiThread {
+                try {
+                    val bitmap = android.graphics.Bitmap.createBitmap(
+                        webView.width, webView.height, android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    val canvas = android.graphics.Canvas(bitmap)
+                    webView.draw(canvas)
+                    val file = java.io.File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS
+                        ), "BankTotal_capture.png"
+                    )
+                    java.io.FileOutputStream(file).use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, it)
+                    }
+                    bitmap.recycle()
+                    android.widget.Toast.makeText(this@MainActivity, "캡처 저장됨", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this@MainActivity, "캡처 실패", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     // --- 권한 ---

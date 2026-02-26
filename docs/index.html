@@ -168,6 +168,17 @@ const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStar
 
 let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},sfaDaily={},currentTab='settle',ledgerMode='out',logFilterTag='all';
 
+// --- localStorage 캐시 (새로고침 시 데이터 보존) ---
+function lsCache(key,data){try{localStorage.setItem('bt_'+key,JSON.stringify(data))}catch(e){}}
+function lsLoad(key){try{const s=localStorage.getItem('bt_'+key);return s?JSON.parse(s):null}catch(e){return null}}
+function loadCachedData(){
+    const ca=lsLoad('accounts');if(ca){accounts=ca;renderAccounts();}
+    const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.values(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
+    const cm=lsLoad('settle_manual');if(cm){settleManual=cm;}
+    const cs=lsLoad('sfa_daily');if(cs){sfaDaily=cs;}
+    if(cm||cs)renderSettle();
+}
+
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){
     const sorted=[...txList].sort((a,b)=>(a.ts||0)-(b.ts||0));
@@ -242,11 +253,12 @@ function connectSSE(path,handler){
 }
 
 function initSSE(){
-    connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts();if(currentTab==='settle')renderSettle()});
+    connectSSE('/banktotal/accounts',d=>{accounts=d||{};lsCache('accounts',accounts);renderAccounts();if(currentTab==='settle')renderSettle()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
         const prev=transactions.length;
         transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        lsCache('transactions',d);
         renderLedger();
         // 새 출금 거래 발생 시 AI 보정 체크
         if(transactions.length>prev&&prev>0){
@@ -262,6 +274,7 @@ function initSSE(){
     });
     connectSSE('/banktotal/settle/manual',d=>{
         settleManual=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+        lsCache('settle_manual',settleManual);
         if(currentTab==='settle')renderSettle();
     });
     connectSSE('/banktotal/settle/auto',d=>{
@@ -270,6 +283,7 @@ function initSSE(){
     });
     connectSSE('/banktotal/sfa_daily',d=>{
         sfaDaily=d||{};
+        lsCache('sfa_daily',sfaDaily);
         if(currentTab==='settle')renderSettle();
     });
     fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
@@ -1228,9 +1242,9 @@ function doRefresh(){
 
 // --- 초기화 ---
 window.onload=function(){
+    loadCachedData(); // localStorage 캐시 먼저 렌더 (새로고침 시 즉시 표시)
     if(typeof NativeBridge!=='undefined'){
         loadFromNative();
-        // 네이티브에서도 Firebase SSE로 거래/로그 데이터 로드
         initSSE();
     }else{
         initSSE();

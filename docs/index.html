@@ -552,16 +552,38 @@ function renderPermissions(){
 let itemState={};
 try{const s=localStorage.getItem('settleItemState');if(s)itemState=JSON.parse(s)}catch(e){}
 function saveItemState(){try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}}
+function btLog(tag,msg){
+    const ts=Date.now(),time=new Date().toLocaleString('ko-KR',{hour12:false});
+    fetch(FB+'/banktotal/logs/web_'+ts+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tag,msg,time,ts})}).catch(()=>{});
+}
 function ist(k){if(!itemState[k])itemState[k]={ex:false,sh:0,st:''};return itemState[k]}
 function setItemStatus(k,st){const s=ist(k);s.st=(s.st===st)?'':st;saveItemState();renderSettle()}
 function deleteSettleItem(id){
-    if(!confirm('삭제하시겠습니까?'))return;
+    if(!confirm('이 항목을 완전 삭제하시겠습니까? (모든 날짜에서 사라집니다)'))return;
     const mi=settleManual.findIndex(m=>m._id===id);
-    if(mi>=0){fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'});settleManual.splice(mi,1)}
-    else{const ai=settleAuto.findIndex(a=>a._id===id);if(ai>=0){fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'});settleAuto.splice(ai,1)}}
+    if(mi>=0){
+        const item=settleManual[mi];
+        btLog('[DEL]',`${item.name} ${item.amount}원 ${item.type} ${item.cycle} 삭제`);
+        fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'});
+        settleManual.splice(mi,1);
+        lsCache('settle_manual',settleManual);
+        markLocalEdit();
+    }else{
+        const ai=settleAuto.findIndex(a=>a._id===id);
+        if(ai>=0){
+            btLog('[DEL]',`${settleAuto[ai].name} auto 삭제`);
+            fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'});
+            settleAuto.splice(ai,1);
+        }
+    }
     renderSettle();
 }
-function toggleItem(k){ist(k).ex=!ist(k).ex;saveItemState();renderSettle()}
+function toggleItem(k){
+    const s=ist(k);s.ex=!s.ex;
+    btLog('[TOGGLE]',`${k} → ${s.ex?'제외':'포함'}`);
+    saveItemState();renderSettle();
+}
 
 // 스와이프 드래그 — 좌우=날짜이동, 탭=포함/제외
 let swSt=null;
@@ -832,7 +854,7 @@ function autoConfirmSettle(newOutTxs){
             if(s.st==='confirmed')return;
             s.st='confirmed';
             changed=true;
-            // 매칭 기록 저장 (판단 가이드 축적)
+            btLog('[CONFIRM]',`자동확인: ${cp}→${m.name} ${tx.amount}원`);
             saveMatchLog(cp,m.name,tx.amount,m.amount,true);
         });
     });
@@ -855,12 +877,16 @@ function applyPending(idx){
     fetch(FB+'/banktotal/settle/manual/'+p.id+'.json',{method:'PATCH',body:JSON.stringify(p.patch)});
     const item=settleManual.find(m=>m._id===p.id);
     if(item)Object.assign(item,p.patch);
+    btLog('[APPLY]',`보정 승인: ${p.name} ${p.desc}`);
     saveMatchLog(p.cp||'',p.name,p.txAmt||0,p.patch.amount||0,false);
     q.splice(idx,1);savePendingQueue(q);renderSettle();
 }
 function dismissPending(idx){
     const q=getPendingQueue();const p=q[idx];
-    if(p)saveMatchLog(p.cp||'',p.name,0,0,false); // 거절 기록
+    if(p){
+        btLog('[DISMISS]',`보정 거부: ${p.name} ${p.desc}`);
+        saveMatchLog(p.cp||'',p.name,0,0,false);
+    }
     q.splice(idx,1);savePendingQueue(q);renderSettle();
 }
 
@@ -1328,10 +1354,12 @@ async function executeAiAction(act){
         // 2) Firebase 백업
         const {_id,...fbEntry}=entry;
         await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbEntry)});
+        btLog('[ADD]',`${entry.name} ${entry.amount}원 ${entry.type} ${entry.cycle} AI추가`);
         if(currentTab==='settle')renderSettle();
     }else if(act.act==='del'){
         const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
         for(const t of targets){
+            btLog('[DEL]',`${t.name} ${t.amount}원 ${t.type} ${t.cycle} AI삭제`);
             await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'DELETE'});
         }
         // 로컬에서도 삭제 + localStorage 저장

@@ -206,9 +206,24 @@ function loadCachedData(){
     _needsFirebaseSync=checkDataVersion();
     const ca=lsLoad('accounts');if(ca){accounts=ca;renderAccounts();}
     const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.values(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
-    const cm=lsLoad('settle_manual');if(cm){settleManual=cm;}
-    const cs=lsLoad('sfa_daily');if(cs){sfaDaily=cs;}
-    if(cm||cs)renderSettle();
+    // Room DB 우선: NativeBridge 있으면 Room에서 settle/sfa 로드
+    let roomLoaded=false;
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            if(NativeBridge.hasRoomData()){
+                const si=NativeBridge.getSettleItemsJson();
+                if(si){settleManual=JSON.parse(si);roomLoaded=true;}
+                const sf=NativeBridge.getSfaDailyJson();
+                if(sf){sfaDaily=JSON.parse(sf);roomLoaded=true;}
+            }
+        }catch(e){}
+    }
+    if(!roomLoaded){
+        // Room 없으면 localStorage fallback
+        const cm=lsLoad('settle_manual');if(cm){settleManual=cm;}
+        const cs=lsLoad('sfa_daily');if(cs){sfaDaily=cs;}
+    }
+    if(settleManual.length||Object.keys(sfaDaily).length)renderSettle();
 }
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
@@ -305,39 +320,38 @@ function initSSE(){
         logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLogs();
     });
-    connectSSE('/banktotal/settle/manual',d=>{
-        if(isLocalEditRecent())return; // 로컬 수정 직후 Firebase 덮어쓰기 방지
-        const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
-        // 항상 병합: 로컬 항목 절대 삭제 안 함 (데이터 손실 방지)
-        const remoteMap=new Map(remote.map(r=>[r._id,r]));
-        const localMap=new Map(settleManual.map(m=>[m._id,m]));
-        // 1) 로컬에 있는 항목: 로컬 값 유지 (Firebase가 덮어쓰지 않음)
-        // 2) Firebase에만 있는 새 항목: 추가
-        const merged=[...settleManual];
-        const mergedIds=new Set(merged.map(m=>m._id));
-        remote.forEach(r=>{if(!mergedIds.has(r._id)){merged.push(r);mergedIds.add(r._id);}});
-        settleManual=merged;
-        lsCache('settle_manual',settleManual);
-        if(currentTab==='settle')renderSettle();
-    });
-    connectSSE('/banktotal/settle/auto',d=>{
-        settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
-        if(currentTab==='settle')renderSettle();
-    });
-    connectSSE('/banktotal/sfa_daily',d=>{
-        if(isLocalEditRecent())return; // 로컬 수정 직후 Firebase 덮어쓰기 방지
-        const hasLocal=lsLoad('sfa_daily');
-        if(!hasLocal||_needsFirebaseSync){
-            sfaDaily=d||{};
-            lsCache('sfa_daily',sfaDaily);
-        }else{
-            // 새 날짜 항목만 병합 (기존 로컬값 보존)
-            const remote=d||{};
-            Object.keys(remote).forEach(k=>{if(!sfaDaily[k])sfaDaily[k]=remote[k];});
-            lsCache('sfa_daily',sfaDaily);
-        }
-        if(currentTab==='settle')renderSettle();
-    });
+    // Room DB 사용 시 settle/sfa SSE 불필요 (Room이 Single Source of Truth)
+    const _useRoom=typeof NativeBridge!=='undefined'&&NativeBridge.hasRoomData();
+    if(!_useRoom){
+        // Room 없으면 기존 Firebase SSE 유지
+        connectSSE('/banktotal/settle/manual',d=>{
+            if(isLocalEditRecent())return;
+            const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            const merged=[...settleManual];
+            const mergedIds=new Set(merged.map(m=>m._id));
+            remote.forEach(r=>{if(!mergedIds.has(r._id)){merged.push(r);mergedIds.add(r._id);}});
+            settleManual=merged;
+            lsCache('settle_manual',settleManual);
+            if(currentTab==='settle')renderSettle();
+        });
+        connectSSE('/banktotal/settle/auto',d=>{
+            settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            if(currentTab==='settle')renderSettle();
+        });
+        connectSSE('/banktotal/sfa_daily',d=>{
+            if(isLocalEditRecent())return;
+            const hasLocal=lsLoad('sfa_daily');
+            if(!hasLocal||_needsFirebaseSync){
+                sfaDaily=d||{};
+                lsCache('sfa_daily',sfaDaily);
+            }else{
+                const remote=d||{};
+                Object.keys(remote).forEach(k=>{if(!sfaDaily[k])sfaDaily[k]=remote[k];});
+                lsCache('sfa_daily',sfaDaily);
+            }
+            if(currentTab==='settle')renderSettle();
+        });
+    }
     fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
 }
 
@@ -349,6 +363,16 @@ function loadFromNative(){
         if(json){
             const list=JSON.parse(json);
             renderNativeAccounts(list);
+        }
+    }catch(e){}
+    // Room DB에서 settle/sfa 최신 데이터 갱신
+    try{
+        if(NativeBridge.hasRoomData()){
+            const si=NativeBridge.getSettleItemsJson();
+            if(si){settleManual=JSON.parse(si);}
+            const sf=NativeBridge.getSfaDailyJson();
+            if(sf){sfaDaily=JSON.parse(sf);}
+            if(currentTab==='settle')renderSettle();
         }
     }catch(e){}
     return true;
@@ -554,9 +578,30 @@ function renderPermissions(){
 
 // --- 정산 렌더링 ---
 // 정산 시뮬레이션 — 개별 항목 상태 (_key → {ex, sh})
+// Room DB 있으면 NativeBridge에서 로드, 없으면 localStorage
 let itemState={};
-try{const s=localStorage.getItem('settleItemState');if(s)itemState=JSON.parse(s)}catch(e){}
-function saveItemState(){try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}}
+const _hasNB=typeof NativeBridge!=='undefined';
+function _loadItemState(){
+    try{
+        if(_hasNB&&NativeBridge.hasRoomData&&NativeBridge.hasRoomData()){
+            const s=NativeBridge.getItemStatesJson();
+            if(s&&s!=='{}')itemState=JSON.parse(s);
+            else{const ls=localStorage.getItem('settleItemState');if(ls)itemState=JSON.parse(ls);}
+        }else{
+            const ls=localStorage.getItem('settleItemState');if(ls)itemState=JSON.parse(ls);
+        }
+    }catch(e){}
+}
+_loadItemState();
+function saveItemState(){
+    try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}
+    // Room DB에도 동기화
+    if(_hasNB&&NativeBridge.saveItemStateNative){
+        Object.entries(itemState).forEach(([k,v])=>{
+            try{NativeBridge.saveItemStateNative(JSON.stringify({key:k,ex:!!v.ex,sh:v.sh||0,st:v.st||'',_ov:!!v._ov}))}catch(e){}
+        });
+    }
+}
 function btLog(tag,msg){
     const ts=Date.now(),time=new Date().toLocaleString('ko-KR',{hour12:false});
     fetch(FB+'/banktotal/logs/web_'+ts+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -583,6 +628,8 @@ function deleteSettleItem(id){
             lsCache('settle_auto',settleAuto);
         }
     }
+    // Room DB에서도 삭제
+    if(_hasNB&&NativeBridge.deleteSettleItemNative)try{NativeBridge.deleteSettleItemNative(id)}catch(e){}
     renderSettle();
 }
 var _togLock=0;
@@ -801,6 +848,7 @@ function editSfaDaily(key,cur){
     markLocalEdit();
     sfaDaily[key]={amount:amt,ts:Date.now()};
     lsCache('sfa_daily',sfaDaily);
+    try{if(_hasNB)NativeBridge.saveSfaDailyNative(key,amt)}catch(e){}
     fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
     renderSettle();
     // 동기화 피드백
@@ -811,11 +859,16 @@ function editSfaDaily(key,cur){
     setTimeout(()=>fb.remove(),2000);
 }
 function settleItemMenu(key,id,amt,isSfa,sfaKey,cycle){
+    // 네이티브 BottomSheet 사용 (WebView 터치 문제 근본 해결)
+    if(_hasNB&&NativeBridge.showItemMenu){
+        try{NativeBridge.showItemMenu(key,id,amt,!!isSfa,sfaKey||'',cycle||'none');return}catch(e){}
+    }
+    // fallback: 웹 다이얼로그
     const old=document.getElementById('settleMenu');if(old)old.remove();
     const s=ist(key);
     const exTxt=s.ex?'포함':'제외';
     const exClr=s.ex?'#4fc3f7':'#ef5350';
-    const canDel=cycle==='none'||cycle==='once'; // 반복항목은 삭제 불가 (제외만)
+    const canDel=cycle==='none'||cycle==='once';
     const d=document.createElement('div');d.id='settleMenu';
     d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center';
     d.innerHTML=`<div style="background:#222;border-radius:12px;padding:20px;min-width:200px;text-align:center">
@@ -841,11 +894,14 @@ function editSettleAmount(id,cur){
         fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PATCH',body:JSON.stringify({amount:amt})});
         settleManual[mIdx].amount=amt;
         lsCache('settle_manual',settleManual);
+        // Room DB 동기화
+        try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(settleManual[mIdx]))}catch(e){}
     }else{
         const aIdx=settleAuto.findIndex(a=>a._id===id);
         if(aIdx>=0){
             fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'PATCH',body:JSON.stringify({amount:amt})});
             settleAuto[aIdx].amount=amt;
+            try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(settleAuto[aIdx]))}catch(e){}
         }
     }
     renderSettle();
@@ -895,7 +951,7 @@ function applyPending(idx){
     const q=getPendingQueue();const p=q[idx];if(!p)return;
     fetch(FB+'/banktotal/settle/manual/'+p.id+'.json',{method:'PATCH',body:JSON.stringify(p.patch)});
     const item=settleManual.find(m=>m._id===p.id);
-    if(item)Object.assign(item,p.patch);
+    if(item){Object.assign(item,p.patch);try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(item))}catch(e){}}
     btLog('[APPLY]',`보정 승인: ${p.name} ${p.desc}`);
     saveMatchLog(p.cp||'',p.name,p.txAmt||0,p.patch.amount||0,false);
     q.splice(idx,1);savePendingQueue(q);renderSettle();
@@ -1058,11 +1114,13 @@ function generateAllItems(manual,auto,days){
 function deleteSettle(id){
     if(!confirm('삭제하시겠습니까?'))return;
     fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+    try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
 }
 
 function deleteAutoSettle(id){
     if(!confirm('삭제하시겠습니까?'))return;
     fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+    try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
 }
 
 // --- AI 재무상담 (Gemini API) ---
@@ -1423,7 +1481,9 @@ async function executeAiAction(act){
         settleManual.push(entry);
         lsCache('settle_manual',settleManual);
         markLocalEdit();
-        // 2) Firebase 백업
+        // 2) Room DB 저장 (앱 내)
+        try{if(typeof NativeBridge!=='undefined')NativeBridge.saveSettleItem(JSON.stringify(entry));}catch(e){}
+        // 3) Firebase 백업
         const {_id,...fbEntry}=entry;
         await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbEntry)});
         btLog('[ADD]',`${entry.name} ${entry.amount}원 ${entry.type} ${entry.cycle} AI추가`);
@@ -1432,6 +1492,8 @@ async function executeAiAction(act){
         const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
         for(const t of targets){
             btLog('[DEL]',`${t.name} ${t.amount}원 ${t.type} ${t.cycle} AI삭제`);
+            // Room DB 삭제
+            try{if(typeof NativeBridge!=='undefined')NativeBridge.deleteSettleItemNative(t._id);}catch(e){}
             await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'DELETE'});
         }
         // 로컬에서도 삭제 + localStorage 저장

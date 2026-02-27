@@ -775,7 +775,7 @@ function renderSettle(){
                         <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
                     </span>
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span onclick="settleItemMenu('${u._key}','${u._id}',${u.amount},${!!u._sfaKey},'${u._sfaKey||''}')" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;touch-action:manipulation;margin-right:6px;padding:6px 2px">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span onclick="settleItemMenu('${u._key}','${u._id}',${u.amount},${!!u._sfaKey},'${u._sfaKey||''}','${u.cycle||'none'}')" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;touch-action:manipulation;margin-right:6px;padding:6px 2px">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
                 </div>`;
             });
@@ -810,18 +810,19 @@ function editSfaDaily(key,cur){
     document.body.appendChild(fb);
     setTimeout(()=>fb.remove(),2000);
 }
-function settleItemMenu(key,id,amt,isSfa,sfaKey){
+function settleItemMenu(key,id,amt,isSfa,sfaKey,cycle){
     const old=document.getElementById('settleMenu');if(old)old.remove();
     const s=ist(key);
     const exTxt=s.ex?'포함':'제외';
     const exClr=s.ex?'#4fc3f7':'#ef5350';
+    const canDel=cycle==='none'||cycle==='once'; // 반복항목은 삭제 불가 (제외만)
     const d=document.createElement('div');d.id='settleMenu';
     d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center';
     d.innerHTML=`<div style="background:#222;border-radius:12px;padding:20px;min-width:200px;text-align:center">
         <div style="color:#aaa;font-size:13px;margin-bottom:16px">${fmt(amt)}원</div>
-        <div style="display:flex;gap:10px;justify-content:center">
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
             <button onclick="document.getElementById('settleMenu').remove();toggleItem('${key}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:${exClr};color:#fff;touch-action:manipulation">${exTxt}</button>
-            <button onclick="document.getElementById('settleMenu').remove();deleteSettleItem('${id}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#e74c3c;color:#fff;touch-action:manipulation">삭제</button>
+            ${canDel?`<button onclick="document.getElementById('settleMenu').remove();deleteSettleItem('${id}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#e74c3c;color:#fff;touch-action:manipulation">삭제</button>`:''}
             <button onclick="document.getElementById('settleMenu').remove();${isSfa?`editSfaDaily('${sfaKey}',${amt})`:`editSettleAmount('${id}',${amt})`}" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#555;color:#fff;touch-action:manipulation">수정</button>
         </div>
         <div onclick="document.getElementById('settleMenu').remove()" style="margin-top:14px;color:#666;font-size:13px;padding:8px;touch-action:manipulation">닫기</div>
@@ -1001,7 +1002,7 @@ function generateAllItems(manual,auto,days){
             const st=ist(key);
             const day=Math.max(0,Math.min(29,st.sh));
             const d=new Date(now.getTime()+day*86400000);
-            result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,isPending:true,excluded:st.ex});
+            result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,cycle:m.cycle,isPending:true,excluded:st.ex});
             return;
         }
         // 과거 1일만 탐색 (어제 미처리 이월용, 그 이전은 잔고에 이미 반영)
@@ -1025,7 +1026,7 @@ function generateAllItems(manual,auto,days){
                 const st=ist(key);
                 const adjDay=Math.max(0,Math.min(29,i+st.sh));
                 const nd=new Date(now.getTime()+adjDay*86400000);
-                result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,excluded:st.ex});
+                result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,cycle:m.cycle,excluded:st.ex});
             }
         }
     });
@@ -1035,7 +1036,7 @@ function generateAllItems(manual,auto,days){
             const st=ist(key);
             const day=Math.max(0,Math.min(29,st.sh));
             const d=new Date(now.getTime()+day*86400000);
-            result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),_key:key,_id:a._id,isPending:true,excluded:st.ex});
+            result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),_key:key,_id:a._id,cycle:'none',isPending:true,excluded:st.ex});
             return;
         }
         if(!a.dueDate&&!a.amount)return;
@@ -1048,7 +1049,7 @@ function generateAllItems(manual,auto,days){
             const st=ist(key);
             const newDay=Math.max(0,Math.min(29,origDay+st.sh));
             const nd=new Date(now.getTime()+newDay*86400000);
-            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:nd.getTime(),_key:key,_id:a._id,overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
+            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:nd.getTime(),_key:key,_id:a._id,cycle:a.cycle||'none',overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
         }
     });
     return result.sort((a,b)=>a.date-b.date);

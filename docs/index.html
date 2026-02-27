@@ -104,6 +104,16 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
 </div>
 
+<div id="aiBar" style="background:#1a1a2e;padding:4px 8px;display:flex;gap:4px;align-items:center;position:sticky;top:0;z-index:9">
+    <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
+    <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;cursor:pointer">&#128247;</button>
+    <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;cursor:pointer">&#128248;</button>
+    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:12px;padding:6px 8px;flex:1">
+    <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:5px 10px;font-size:12px">AI</button>
+    <span id="aiToggle" onclick="toggleAiMsgs()" style="color:#707088;font-size:14px;cursor:pointer;padding:0 4px">&#9660;</span>
+</div>
+<div class="ai-msgs" id="aiMsgs" style="display:none;max-height:250px;margin:0 8px"></div>
+
 <div class="tabs">
     <div class="tab active" data-tab="settle" onclick="showTab('settle')">정산</div>
     <div class="tab" data-tab="accounts" onclick="showTab('accounts')">계좌</div>
@@ -128,15 +138,6 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="section active" id="sec-settle">
     <div id="settleSummary"></div>
     <div id="settleContent"></div>
-    <div style="margin-top:12px">
-        <div class="ai-msgs" id="aiMsgs"></div>
-        <div class="ai-input-row">
-            <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
-            <button onclick="loadLatestImage()" style="padding:8px 10px;background:#2a2a40;border:1px solid #333;border-radius:8px;color:#aaa;font-size:16px;cursor:pointer">&#128247;</button>
-            <input class="ai-input" id="aiInput" placeholder="항목등록, 재무질문, 사진분석..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:13px;padding:8px">
-            <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:8px 12px;font-size:13px">AI</button>
-        </div>
-    </div>
     <div style="margin-top:12px;display:flex;gap:6px">
         <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:11px;color:#4fc3f7;flex:1;padding:8px">로그</div>
         <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:11px;color:#4fc3f7;flex:1;padding:8px">권한</div>
@@ -1389,12 +1390,22 @@ async function executeAiAction(act){
 
 function delAiMsg(i){aiMessages.splice(i,1);renderAiMsgs();}
 function clearAiMsgs(){aiMessages=[];renderAiMsgs();}
+let _aiMsgsOpen=false;
+function toggleAiMsgs(){
+    _aiMsgsOpen=!_aiMsgsOpen;
+    document.getElementById('aiMsgs').style.display=_aiMsgsOpen?'block':'none';
+    document.getElementById('aiToggle').innerHTML=_aiMsgsOpen?'&#9650;':'&#9660;';
+}
 function renderAiMsgs(){
     const el=document.getElementById('aiMsgs');if(!el)return;
+    // 메시지 있으면 자동 펼침
+    if(aiMessages.length>0&&!_aiMsgsOpen)toggleAiMsgs();
     let h=aiMessages.length>1?'<div style="text-align:right;padding:2px 4px"><span onclick="clearAiMsgs()" style="font-size:10px;color:#707088;cursor:pointer">전체삭제</span></div>':'';
     h+=aiMessages.map((m,i)=>`<div class="ai-msg ${m.role}" style="position:relative">${m.text.replace(/\n/g,'<br>')}<span onclick="event.stopPropagation();delAiMsg(${i})" style="position:absolute;top:2px;right:6px;font-size:10px;color:#70708899;cursor:pointer">✕</span></div>`).join('');
     el.innerHTML=h;
     el.scrollTop=el.scrollHeight;
+    // 비면 자동 접기
+    if(aiMessages.length===0&&_aiMsgsOpen)toggleAiMsgs();
 }
 
 // --- 새로고침 (로컬 데이터 보존 + Firebase 최신값 병합) ---

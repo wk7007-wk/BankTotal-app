@@ -587,6 +587,7 @@ function deleteSettleItem(id){
 }
 function toggleItem(k){
     const s=ist(k);s.ex=!s.ex;
+    s._ov=true; // 수동 override — 자동제외 덮어쓰기 방지
     btLog('[TOGGLE]',`${k} → ${s.ex?'제외':'포함'}`);
     saveItemState();renderSettle();
 }
@@ -668,7 +669,9 @@ function renderSettle(){
     const exCnt=items.filter(u=>u.excluded).length;
 
     // confirmed 당일 출금 → 자동 제외 (이미 출금되어 잔고에 반영됨, 이중 차감 방지)
+    // 단, 사용자가 수동 토글(_ov)한 항목은 자동제외 무시
     items.forEach(u=>{
+        if(ist(u._key)._ov)return; // 수동 override 있으면 자동제외 안 함
         if(ist(u._key).st==='confirmed'&&u.type==='출금'&&!u.excluded){
             u.excluded=true;u._autoExclude='출금확인';
         }
@@ -676,6 +679,7 @@ function renderSettle(){
     // 날짜 지난 항목 처리: 출금만 이월, 입금은 자동 제외 (잔고에 이미 반영)
     const todayTs=now.getTime();
     items.forEach(u=>{
+        if(ist(u._key)._ov)return; // 수동 override 있으면 자동제외 안 함
         if(u.date<todayTs&&!u.excluded){
             if(u.type==='입금'){u.excluded=true;u._autoExclude='이월삭제';}
             else u.date=todayTs; // 출금만 오늘로 이월

@@ -111,7 +111,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
     <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">사진</button>
     <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">캡처</button>
-    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:12px;padding:6px 8px;flex:1">
+    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." inputmode="text" enterkeyhint="send" autocomplete="off" onkeyup="if(event.keyCode===13)askAi()" style="font-size:12px;padding:6px 8px;flex:1">
     <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:5px 10px;font-size:12px">AI</button>
     <span id="aiToggle" onclick="toggleAiMsgs()" style="color:#707088;font-size:14px;cursor:pointer;padding:0 4px">&#9660;</span>
 </div>

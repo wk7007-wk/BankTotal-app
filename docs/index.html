@@ -111,7 +111,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
     <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">사진</button>
     <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">캡처</button>
-    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." inputmode="text" enterkeyhint="send" autocomplete="off" onkeyup="if(event.keyCode===13)askAi()" style="font-size:12px;padding:6px 8px;flex:1">
+    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." autocomplete="off" style="font-size:12px;padding:6px 8px;flex:1">
     <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:5px 10px;font-size:12px">AI</button>
     <span id="aiToggle" onclick="toggleAiMsgs()" style="color:#707088;font-size:14px;cursor:pointer;padding:0 4px">&#9660;</span>
 </div>
@@ -772,7 +772,7 @@ function renderSettle(){
                         <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
                     </span>
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;margin-right:6px">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
                     <span ontouchend="event.stopPropagation();event.preventDefault();toggleItem('${u._key}')" onclick="event.stopPropagation();toggleItem('${u._key}')" style="font-size:16px;padding:10px 12px;margin-left:2px;color:#888;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.1)">✕</span>
                 </div>`;
@@ -1525,6 +1525,14 @@ window.onload=function(){
     loadAiKey();
     try{const v=NativeBridge.getAppVersion();if(v)document.getElementById('appVer').textContent='v'+v;}catch(e){}
 
+    // AI 입력: Enter 전송 (IME 조합 중 아닌 경우만)
+    var _composing=false;
+    var ai=document.getElementById('aiInput');
+    if(ai){
+        ai.addEventListener('compositionstart',function(){_composing=true});
+        ai.addEventListener('compositionend',function(){_composing=false});
+        ai.addEventListener('keydown',function(e){if(!_composing&&e.key==='Enter'){e.preventDefault();askAi();}});
+    }
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};
 };

@@ -775,9 +775,8 @@ function renderSettle(){
                         <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
                     </span>
                     <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
-                    <span onclick="${u._sfaKey?`editSfaDaily('${u._sfaKey}',${u.amount})`:`editSettleAmount('${u._id}',${u.amount})`}" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;margin-right:6px">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span onclick="settleItemMenu('${u._key}','${u._id}',${u.amount},${!!u._sfaKey},'${u._sfaKey||''}')" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;touch-action:manipulation;margin-right:6px;padding:6px 2px">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
-                    <span ontouchend="event.stopPropagation();toggleItem('${u._key}')" style="font-size:18px;padding:14px 18px;margin-left:0;color:#888;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,255,255,.15);user-select:none">✕</span>
                 </div>`;
             });
         }else{
@@ -810,6 +809,18 @@ function editSfaDaily(key,cur){
     fb.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#4fc3f7;color:#121212;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:999;';
     document.body.appendChild(fb);
     setTimeout(()=>fb.remove(),2000);
+}
+function settleItemMenu(key,id,amt,isSfa,sfaKey){
+    const s=ist(key);
+    const exLabel=s.ex?'포함 (제외 해제)':'제외';
+    const r=prompt(exLabel+'→1, 수정→2, 취소→빈칸\n현재 금액: '+fmt(amt),'');
+    if(r===null||r.trim()==='')return;
+    const c=r.trim();
+    if(c==='1'){toggleItem(key);}
+    else if(c==='2'){
+        if(isSfa){editSfaDaily(sfaKey,amt);}
+        else{editSettleAmount(id,amt);}
+    }
 }
 function editSettleAmount(id,cur){
     const v=prompt('금액 수정 (숫자만)',cur||'');

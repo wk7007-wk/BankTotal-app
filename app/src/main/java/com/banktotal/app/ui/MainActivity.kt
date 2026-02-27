@@ -413,9 +413,17 @@ class MainActivity : AppCompatActivity() {
             dialog.dismiss()
         }
 
-        view.findViewById<TextView>(R.id.btnDelete).setOnClickListener {
-            webView.evaluateJavascript("deleteSettleItem('$id')", null)
-            dialog.dismiss()
+        view.findViewById<TextView>(R.id.btnDelete).apply {
+            val isRecur = cycle != "none" && cycle != "once"
+            text = if (isRecur) "오늘 삭제" else "삭제"
+            setOnClickListener {
+                if (isRecur) {
+                    webView.evaluateJavascript("excludeDay('$key')", null)
+                } else {
+                    webView.evaluateJavascript("deleteSettleItem('$id')", null)
+                }
+                dialog.dismiss()
+            }
         }
 
         view.findViewById<TextView>(R.id.btnEdit).apply {

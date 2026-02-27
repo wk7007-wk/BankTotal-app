@@ -15,7 +15,7 @@ import java.text.DecimalFormat
  * → WebView onclick 미발화 문제 근본 해결
  *
  * [규칙]
- * - 반복항목(cycle != none/once)은 삭제 불가 표시
+ * - 반복항목: "오늘 삭제" (당일만 제외), 일회성: "삭제" (완전삭제)
  * - SFA/BLOCK 항목은 금액 수정 불가
  */
 class SettleMenuBottomSheet : BottomSheetDialogFragment() {
@@ -23,6 +23,7 @@ class SettleMenuBottomSheet : BottomSheetDialogFragment() {
     var item: SettleRepository.SettleViewItem? = null
     var onToggleExclude: (() -> Unit)? = null
     var onDelete: (() -> Unit)? = null
+    var onExcludeDay: (() -> Unit)? = null
     var onEdit: (() -> Unit)? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -41,8 +42,13 @@ class SettleMenuBottomSheet : BottomSheetDialogFragment() {
             setOnClickListener { onToggleExclude?.invoke(); dismiss() }
         }
 
-        view.findViewById<TextView>(R.id.btnDelete).setOnClickListener {
-            onDelete?.invoke(); dismiss()
+        view.findViewById<TextView>(R.id.btnDelete).apply {
+            val isRecur = item.cycle != "none" && item.cycle != "once"
+            text = if (isRecur) "오늘 삭제" else "삭제"
+            setOnClickListener {
+                if (isRecur) onExcludeDay?.invoke() else onDelete?.invoke()
+                dismiss()
+            }
         }
 
         view.findViewById<TextView>(R.id.btnEdit).apply {

@@ -17,7 +17,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .total-label{color:#666;font-size:12px;margin-top:4px}
 .total-val{font-size:16px;color:#4fc3f7;margin:2px 0}
 .last-update{color:#666;font-size:12px}
-.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:0;z-index:9}
+.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:33px;z-index:9}
 .tab{flex:1;min-width:70px;padding:14px 12px;text-align:center;font-size:14px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
 .tab.active{color:#4fc3f7;border-bottom-color:#4fc3f7}
 .section{display:none;padding:12px}
@@ -93,7 +93,6 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 
 <div class="header" id="header">
     <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
-    <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="position:absolute;top:16px;left:12px;background:#333;border:none;color:#888;font-size:16px;width:36px;height:36px;border-radius:50%;cursor:pointer">&#128247;</button>
     <span id="appVer" style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;color:#555"></span>
     <div class="subtotal-row" id="subtotalRow">
         <div style="color:#888;font-size:12px">소계</div>
@@ -106,8 +105,8 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 
 <div id="aiBar" style="background:#1a1a2e;padding:4px 8px;display:flex;gap:4px;align-items:center;position:sticky;top:0;z-index:9">
     <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
-    <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;cursor:pointer">&#128247;</button>
-    <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;cursor:pointer">&#128248;</button>
+    <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">사진</button>
+    <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">캡처</button>
     <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." onkeydown="if(event.key==='Enter')askAi()" style="font-size:12px;padding:6px 8px;flex:1">
     <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:5px 10px;font-size:12px">AI</button>
     <span id="aiToggle" onclick="toggleAiMsgs()" style="color:#707088;font-size:14px;cursor:pointer;padding:0 4px">&#9660;</span>
@@ -1005,11 +1004,12 @@ function generateAllItems(manual,auto,days){
                 if((m.dayOfWeek||0)===0&&d.getDay()===6&&m.name==='물류'){match=true;}
             }
             if(match){
-                const key=m._id+'_'+(i<0?'p'+(-i):i);
+                // 날짜 기반 키 — 오프셋이 아닌 날짜 고정이라 다음날에도 제외 상태 유지
+                const dateKey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+                const key=m._id+'_'+dateKey;
                 const st=ist(key);
                 const adjDay=Math.max(0,Math.min(29,i+st.sh));
                 const nd=new Date(now.getTime()+adjDay*86400000);
-                // 과거 항목은 이월 대상 (출금→오늘, 입금→자동제외는 renderSettle에서)
                 result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,excluded:st.ex});
             }
         }

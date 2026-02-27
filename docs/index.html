@@ -94,6 +94,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="header" id="header">
     <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
     <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="position:absolute;top:16px;left:12px;background:#333;border:none;color:#888;font-size:16px;width:36px;height:36px;border-radius:50%;cursor:pointer">&#128247;</button>
+    <span id="appVer" style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;color:#555"></span>
     <div class="subtotal-row" id="subtotalRow">
         <div style="color:#888;font-size:12px">소계</div>
         <span class="subtotal-val" id="subtotalVal">0</span>
@@ -1429,6 +1430,7 @@ window.onload=function(){
     }
     renderPermissions();
     loadAiKey();
+    try{const v=NativeBridge.getAppVersion();if(v)document.getElementById('appVer').textContent='v'+v;}catch(e){}
 
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};

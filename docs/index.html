@@ -1132,16 +1132,69 @@ function buildFinCtx(){
     return c;
 }
 
+// --- 로컬 파서: 단순 명령은 Gemini 없이 즉시 처리 ---
+function parseLocalCmd(q){
+    // 금액 파싱: "260만" → 2600000, "5만" → 50000, "1300000" → 1300000
+    function parseAmt(s){
+        const m=s.match(/(\d+(?:\.\d+)?)\s*만/);if(m)return Math.round(parseFloat(m[1])*10000);
+        const n=s.match(/(\d{4,})/);if(n)return parseInt(n[1]);
+        return 0;
+    }
+    const amt=parseAmt(q);if(!amt)return null;
+    const isIn=/입금/.test(q);const isOut=/출금|지출/.test(q);
+    const txType=isIn?'입금':isOut?'출금':(amt>0?'출금':'출금');
+    // 주기
+    let cycle='none',day=0,date=null;
+    if(/매일|매일/.test(q))cycle='daily';
+    else if(/매주/.test(q)){cycle='weekly';const dw=q.match(/([월화수목금토일])요?일?/);if(dw)day='월화수목금토일'.indexOf(dw[1])+1;if(day===7)day=0;}
+    else if(/매월/.test(q)){cycle='monthly';const dm=q.match(/(\d{1,2})\s*일/);if(dm)day=parseInt(dm[1]);}
+    else if(/내일/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+1);date=t.toISOString().slice(0,10);}
+    else if(/모레/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+2);date=t.toISOString().slice(0,10);}
+    else if(q.match(/(\d{1,2})\/(\d{1,2})/)){const dm=q.match(/(\d{1,2})\/(\d{1,2})/);cycle='once';const y=new Date().getFullYear();date=`${y}-${dm[1].padStart(2,'0')}-${dm[2].padStart(2,'0')}`;}
+    // 이름 추출: 금액/주기/타입 키워드 제거 후 남은 텍스트
+    let name=q.replace(/\d+(?:\.\d+)?\s*만|\d{4,}|입금|출금|지출|매일|매주|매월|내일|모레|등록|해줘|해 줘|원|[월화수목금토일]요?일?|\d{1,2}\/\d{1,2}/g,'').trim();
+    if(!name)name=txType;
+    const act={act:'add',name,amount:amt,txType,cycle};
+    if(cycle==='weekly')act.day=day;
+    if(cycle==='monthly')act.day=day||1;
+    if(date)act.date=date;
+    return act;
+}
+function parseLocalDel(q){
+    const m=q.match(/삭제\s*(.+)/);if(!m)return null;
+    return{act:'del',name:m[1].trim()};
+}
+
 let _aiAbort=null;
 function askAi(q){
     try{ _askAiInner(q) }catch(e){ alert('askAi에러:'+e.message) }
 }
 async function _askAiInner(q){
     if(!q){q=(document.getElementById('aiInput').value||'').trim();if(!q)return}
+
+    document.getElementById('aiInput').value='';
+
+    // 로컬 파서 시도 (즉시 처리)
+    const del=parseLocalDel(q);
+    if(del){
+        aiMessages.push({role:'user',text:q});
+        await executeAiAction(del);
+        aiMessages.push({role:'bot',text:`삭제 완료: ${del.name}`});
+        renderAiMsgs();if(currentTab==='settle')renderSettle();return;
+    }
+    const local=parseLocalCmd(q);
+    if(local){
+        aiMessages.push({role:'user',text:q});
+        await executeAiAction(local);
+        const info=`${local.name} ${fmt(local.amount)}원 ${local.txType} ${local.cycle}${local.date?' '+local.date:''}`;
+        aiMessages.push({role:'bot',text:`등록완료: ${info}`});
+        renderAiMsgs();if(currentTab==='settle')renderSettle();return;
+    }
+
+    // Gemini fallback
     const key=loadAiKey();
     if(!key){alert('Gemini API Key를 입력하세요');return}
 
-    document.getElementById('aiInput').value='';
     aiMessages.push({role:'user',text:q});
     aiMessages.push({role:'bot',text:'연결중...'});
     renderAiMsgs();
@@ -1345,6 +1398,7 @@ async function executeAiAction(act){
         const dup=settleManual.find(m=>m.name===(act.name||'항목')&&m.amount===(act.amount||0)&&m.type===(act.txType||'입금')&&m.cycle===(act.cycle||'daily'));
         if(dup){aiMessages[aiMessages.length-1].text+=' (이미 등록됨, 중복 스킵)';return}
         const entry={name:act.name||'항목',amount:act.amount||0,type:act.txType||'입금',cycle:act.cycle||'daily',ts:Date.now()};
+        if(act.cycle==='once'&&act.date)entry.date=act.date;
         if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
         else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
         const id='sm_'+Date.now();

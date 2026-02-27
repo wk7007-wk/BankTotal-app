@@ -7,7 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
-.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:sticky;top:0;z-index:10;position:relative}
+.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:relative}
 .refresh-btn{position:absolute;top:16px;right:12px;background:#333;border:none;color:#4fc3f7;font-size:20px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .refresh-btn:active{background:#444}
 .refresh-btn.spinning{animation:spin .6s linear}
@@ -17,7 +17,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .total-label{color:#666;font-size:12px;margin-top:4px}
 .total-val{font-size:16px;color:#4fc3f7;margin:2px 0}
 .last-update{color:#666;font-size:12px}
-.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:33px;z-index:9}
+.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:34px;z-index:9}
 .tab{flex:1;min-width:70px;padding:14px 12px;text-align:center;font-size:14px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
 .tab.active{color:#4fc3f7;border-bottom-color:#4fc3f7}
 .section{display:none;padding:12px}
@@ -107,7 +107,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
     <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
 </div>
 
-<div id="aiBar" style="background:#1a1a2e;padding:4px 8px;display:flex;gap:4px;align-items:center;position:sticky;top:0;z-index:9">
+<div id="aiBar" style="background:#1a1a2e;padding:4px 8px;display:flex;gap:4px;align-items:center;position:sticky;top:0;z-index:10">
     <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
     <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">사진</button>
     <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">캡처</button>
@@ -139,7 +139,7 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 </div>
 
 <div class="section active" id="sec-settle">
-    <div id="settleSummary" style="position:sticky;top:75px;z-index:8;background:#121212;padding-bottom:2px"></div>
+    <div id="settleSummary" style="position:sticky;top:78px;z-index:8;background:#121212;padding-bottom:2px"></div>
     <div id="settleContent"></div>
     <div style="margin-top:12px;display:flex;gap:6px">
         <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:11px;color:#4fc3f7;flex:1;padding:8px">로그</div>
@@ -580,6 +580,7 @@ function deleteSettleItem(id){
             btLog('[DEL]',`${settleAuto[ai].name} auto 삭제`);
             fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'});
             settleAuto.splice(ai,1);
+            lsCache('settle_auto',settleAuto);
         }
     }
     renderSettle();
@@ -608,17 +609,17 @@ document.addEventListener('touchmove',function(e){
 },{passive:false});
 document.addEventListener('touchend',function(e){
     if(!swSt)return;
-    swSt.el.style.transform='';swSt.el.style.opacity='';swSt.el.style.transition='transform .2s,opacity .2s';
-    setTimeout(()=>{if(swSt&&swSt.el)swSt.el.style.transition=''},200);
-    const dt=Date.now()-swSt.t0;
-    if(swSt.sw){
-        const dx=swSt.dx||0;
+    const _sw=swSt;swSt=null; // 먼저 null로 — onclick 중복 방지
+    _sw.el.style.transform='';_sw.el.style.opacity='';_sw.el.style.transition='transform .2s,opacity .2s';
+    setTimeout(()=>{if(_sw.el)_sw.el.style.transition=''},200);
+    const dt=Date.now()-_sw.t0;
+    if(_sw.sw){
+        const dx=_sw.dx||0;
         const days=dx>30?1:dx<-30?-1:0;
-        if(days!==0){ist(swSt.key).sh+=days;saveItemState();renderSettle()}
-    }else if(!swSt.moved&&dt<300){
-        toggleItem(swSt.key);
+        if(days!==0){ist(_sw.key).sh+=days;saveItemState();renderSettle()}
+    }else if(!_sw.moved&&dt<300){
+        toggleItem(_sw.key);
     }
-    swSt=null;
 })
 
 function renderSettle(){

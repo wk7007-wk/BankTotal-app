@@ -631,31 +631,17 @@ function renderSettle(){
     const dayNames=['일','월','화','수','목','금','토'];
 
     const items=generateAllItems(settleManual,settleAuto,30);
-    // SFA: 당일 최초 BLOCK 값(sfa_daily)을 고정값으로 사용 + 제네시스 차감
-    const genesisKeywords=['제네시스','genesis','올원오픈주','토스 (주)제','(주)제'];
-    // 전각→반각 정규화 (은행마다 （）vs() 등 표기 다름)
-    function normCP(s){return s.replace(/[\uff08]/g,'(').replace(/[\uff09]/g,')').replace(/[\u3000\uff10-\uff5a]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/\u3000/g,' ');}
+    // SFA: 당일 BLOCK 금액 그대로 사용 (차감/보정 없음)
     items.forEach(u=>{
         if(u.name==='물류'||u.name==='SFA'){
-            const dk=dateFmt(u.date);
             const ymd=new Date(u.date);
             const dailyKey=ymd.getFullYear()+'-'+(ymd.getMonth()+1).toString().padStart(2,'0')+'-'+ymd.getDate().toString().padStart(2,'0');
             if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount!=null){
-                // sfa_daily 확인됨 → SFA로 전환, 실제 금액 사용
                 u.name='SFA';
                 u.amount=sfaDaily[dailyKey].amount;
                 u.isBlock=true;
                 u._sfaKey=dailyKey;
-                // 제네시스 출금 차감
-                const genTotal=transactions.filter(t=>{
-                    if(t.type!=='출금')return false;
-                    const cp=normCP((t.counterparty||'').toLowerCase());
-                    if(!genesisKeywords.some(k=>cp.includes(k.toLowerCase())))return false;
-                    return dateFmt(t.ts)===dk;
-                }).reduce((s,t)=>s+(t.amount||0),0);
-                if(genTotal>0)u.amount=u.amount-genTotal;
             }
-            // sfa_daily 없으면 물류 300만 그대로 표시
         }
     });
     const included=items.filter(u=>!u.excluded);

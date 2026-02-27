@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/aiBarContainer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="6dp"
+    android:background="#1a1a1a"
+    android:gravity="center_vertical">
+
+    <EditText
+        android:id="@+id/aiInput"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:hint="정산 항목 등록/삭제..."
+        android:textColorHint="#555555"
+        android:textColor="#e0e0e0"
+        android:textSize="13sp"
+        android:background="#252525"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:singleLine="true"
+        android:imeOptions="actionSend"
+        android:inputType="text" />
+
+    <ImageButton
+        android:id="@+id/aiSendBtn"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:src="@android:drawable/ic_menu_send"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="전송"
+        android:tint="#4fc3f7" />
+
+</LinearLayout>

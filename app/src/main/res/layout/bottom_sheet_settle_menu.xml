@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#1e1e1e"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/sheetTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#e0e0e0"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingBottom="12dp" />
+
+    <TextView
+        android:id="@+id/btnToggleExclude"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:text="제외/포함 토글"
+        android:textColor="#ff9800"
+        android:textSize="14sp"
+        android:paddingStart="8dp"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#333333" />
+
+    <TextView
+        android:id="@+id/btnDelete"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:text="삭제"
+        android:textColor="#ef5350"
+        android:textSize="14sp"
+        android:paddingStart="8dp"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#333333" />
+
+    <TextView
+        android:id="@+id/btnEdit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:text="수정"
+        android:textColor="#4fc3f7"
+        android:textSize="14sp"
+        android:paddingStart="8dp"
+        android:background="?attr/selectableItemBackground" />
+
+</LinearLayout>

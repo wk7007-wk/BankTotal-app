@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#121212">
+
+    <!-- 요약 헤더 (sticky) -->
+    <LinearLayout
+        android:id="@+id/summaryHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#1a1a1a">
+
+        <!-- 오늘예상 / 30일예상 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="오늘 예상"
+                    android:textColor="#888888"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/todayPredicted"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#4fc3f7"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="30일 예상"
+                    android:textColor="#888888"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/thirtyDayPredicted"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#e0e0e0"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 제외건수 -->
+        <TextView
+            android:id="@+id/excludedCount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#ff9800"
+            android:textSize="11sp"
+            android:visibility="gone"
+            android:paddingTop="4dp" />
+
+        <!-- 보정 대기 배너 -->
+        <LinearLayout
+            android:id="@+id/pendingBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="#1aff9800"
+            android:padding="8dp"
+            android:layout_marginTop="4dp" />
+
+        <!-- 컬럼 헤더 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="6dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="40dp"
+                android:layout_height="wrap_content"
+                android:text="상태"
+                android:textColor="#666666"
+                android:textSize="10sp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="내역"
+                android:textColor="#666666"
+                android:textSize="10sp" />
+            <TextView
+                android:layout_width="55dp"
+                android:layout_height="wrap_content"
+                android:text="금액"
+                android:textColor="#666666"
+                android:textSize="10sp"
+                android:gravity="end" />
+            <TextView
+                android:layout_width="65dp"
+                android:layout_height="wrap_content"
+                android:text="잔고"
+                android:textColor="#666666"
+                android:textSize="10sp"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <!-- 현재 잔고 행 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#114fc3f7"
+            android:padding="6dp">
+            <TextView
+                android:layout_width="40dp"
+                android:layout_height="wrap_content"
+                android:text="현재"
+                android:textColor="#4fc3f7"
+                android:textSize="12sp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="소계"
+                android:textColor="#aaaaaa"
+                android:textSize="12sp" />
+            <TextView
+                android:layout_width="55dp"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:id="@+id/currentBalance"
+                android:layout_width="65dp"
+                android:layout_height="wrap_content"
+                android:textColor="#4fc3f7"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="end" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 정산 항목 RecyclerView -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/settleRecycler"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
+
+</LinearLayout>

@@ -138,32 +138,73 @@ class BlockAmountAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** 트리에서 id=blockAmount 노드 또는 "BLOCK 금액" 다음 숫자 찾기 */
+    /**
+     * 트리에서 BLOCK 금액 찾기
+     * - 방법1: id=blockAmount 직접 매칭 (가장 정확)
+     * - 방법2: "BLOCK 금액" 텍스트 옆 숫자
+     * - 방법3: 전체 금액 수집 → 최대값 (BLOCK이 화면에서 가장 큰 금액)
+     * - 이전 값 대비 10% 미만 급락 → OCR 오류로 무시
+     */
     private fun findBlockAmountInTree(node: AccessibilityNodeInfo, depth: Int = 0): Long? {
-        if (depth > 15) return null
+        // 방법1,2: 정확한 매칭 시도
+        val exact = findExactBlockAmount(node, 0)
+        if (exact != null) return validateAmount(exact)
 
+        // 방법3: 모든 금액 수집 → 최대값 (WebView라 id/텍스트 매칭 실패 시)
+        val allAmounts = mutableListOf<Long>()
+        collectAllAmounts(node, allAmounts, 0)
+        if (allAmounts.isEmpty()) return null
+
+        val maxAmount = allAmounts.max()
+        return validateAmount(maxAmount)
+    }
+
+    /** id/텍스트 기반 정확한 매칭 */
+    private fun findExactBlockAmount(node: AccessibilityNodeInfo, depth: Int): Long? {
+        if (depth > 15) return null
         val id = node.viewIdResourceName ?: ""
         val text = node.text?.toString() ?: ""
 
-        // 방법1: id에 "blockAmount" 포함
         if (id.contains("blockAmount")) {
             val amount = parseAmount(text)
             if (amount != null) return amount
         }
-
-        // 방법2: "BLOCK 금액" 텍스트 발견 → 자식에서 숫자 찾기
         if (text.contains("BLOCK") && text.contains("금액")) {
             val childAmount = findFirstAmountInChildren(node)
             if (childAmount != null) return childAmount
         }
-
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findBlockAmountInTree(child, depth + 1)
+            val result = findExactBlockAmount(child, depth + 1)
             child.recycle()
             if (result != null) return result
         }
         return null
+    }
+
+    /** 트리의 모든 금액 수집 (최대값 선택용) */
+    private fun collectAllAmounts(node: AccessibilityNodeInfo, list: MutableList<Long>, depth: Int) {
+        if (depth > 15) return
+        val text = node.text?.toString() ?: ""
+        val amount = parseAmount(text)
+        if (amount != null) list.add(amount)
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectAllAmounts(child, list, depth + 1)
+            child.recycle()
+        }
+    }
+
+    /**
+     * 이전 저장값 대비 급락(10% 미만) → OCR 오류로 무시
+     * 예: 4,268,989 → 13,778 은 0.3%이므로 무시
+     */
+    private fun validateAmount(amount: Long): Long? {
+        if (lastSavedAmount > 100_000 && amount < lastSavedAmount / 10) {
+            log("OCR 의심 무시: ${amount}원 (이전 ${lastSavedAmount}원의 ${amount * 100 / lastSavedAmount}%)")
+            return null
+        }
+        return amount
     }
 
     /** 자식 노드에서 첫 번째 금액 찾기 */
@@ -217,7 +258,7 @@ class BlockAmountAccessibilityService : AccessibilityService() {
         return sb.toString()
     }
 
-    /** 당일 최초 BLOCK 감지 시 초기값을 Firebase sfa_daily에 저장 */
+    /** 당일 최초 BLOCK 감지 시 초기값을 Room + Firebase에 저장 */
     private fun saveDailyInitialSfa(amount: Long) {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
         val prefs = applicationContext.getSharedPreferences("sfa_daily", Context.MODE_PRIVATE)
@@ -225,23 +266,22 @@ class BlockAmountAccessibilityService : AccessibilityService() {
         if (savedDate == today) return // 이미 오늘 저장함
         prefs.edit().putString("last_date", today).putLong("initial_amount", amount).apply()
         LogWriter.tx("SFA 일일 초기값 저장: ${today} ${amount}원")
-        try {
-            val obj = JSONObject()
-            obj.put("amount", amount)
-            obj.put("ts", System.currentTimeMillis())
-            val conn = URL("https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app/banktotal/sfa_daily/$today.json")
-                .openConnection() as HttpURLConnection
-            conn.requestMethod = "PUT"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
-            OutputStreamWriter(conn.outputStream).use { it.write(obj.toString()) }
-            conn.responseCode
-            conn.disconnect()
-        } catch (e: Exception) {
-            LogWriter.err("SFA 일일 초기값 Firebase 저장 실패: ${e.message}")
+
+        // Room DB 저장 (Single Source of Truth)
+        val sfaEntity = com.banktotal.app.data.db.SfaDailyEntity(
+            date = today, amount = amount, timestamp = System.currentTimeMillis()
+        )
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                com.banktotal.app.data.db.BankDatabase.getInstance(applicationContext)
+                    .sfaDailyDao().upsert(sfaEntity)
+            } catch (e: Exception) {
+                LogWriter.err("SFA Room 저장 실패: ${e.message}")
+            }
         }
+
+        // Firebase 백업
+        com.banktotal.app.service.FirebaseBackupWriter.backupSfaDaily(sfaEntity)
     }
 
     private fun log(message: String) {

@@ -868,14 +868,13 @@ function settleItemMenu(key,id,amt,isSfa,sfaKey,cycle){
     const s=ist(key);
     const exTxt=s.ex?'포함':'제외';
     const exClr=s.ex?'#4fc3f7':'#ef5350';
-    const canDel=cycle==='none'||cycle==='once';
     const d=document.createElement('div');d.id='settleMenu';
     d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center';
     d.innerHTML=`<div style="background:#222;border-radius:12px;padding:20px;min-width:200px;text-align:center">
         <div style="color:#aaa;font-size:13px;margin-bottom:16px">${fmt(amt)}원</div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
             <button onclick="document.getElementById('settleMenu').remove();toggleItem('${key}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:${exClr};color:#fff;touch-action:manipulation">${exTxt}</button>
-            ${canDel?`<button onclick="document.getElementById('settleMenu').remove();deleteSettleItem('${id}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#e74c3c;color:#fff;touch-action:manipulation">삭제</button>`:''}
+            <button onclick="document.getElementById('settleMenu').remove();deleteSettleItem('${id}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#e74c3c;color:#fff;touch-action:manipulation">삭제</button>
             <button onclick="document.getElementById('settleMenu').remove();${isSfa?`editSfaDaily('${sfaKey}',${amt})`:`editSettleAmount('${id}',${amt})`}" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#555;color:#fff;touch-action:manipulation">수정</button>
         </div>
         <div onclick="document.getElementById('settleMenu').remove()" style="margin-top:14px;color:#666;font-size:13px;padding:8px;touch-action:manipulation">닫기</div>

@@ -62,6 +62,26 @@ class BankNotificationListenerService : NotificationListenerService() {
             val repository = AccountRepository(applicationContext)
             CoroutineScope(Dispatchers.IO).launch {
                 repository.upsertFromSms(parsed)
+
+                // Room 확장 컬럼에 거래 상세 저장
+                val txDao = com.banktotal.app.data.db.BankDatabase.getInstance(applicationContext).transactionDao()
+                txDao.insert(com.banktotal.app.data.db.TransactionEntity(
+                    bankName = parsed.bankName,
+                    transactionType = parsed.transactionType,
+                    amount = parsed.transactionAmount,
+                    timestamp = if (parsed.timestamp > 0) parsed.timestamp else System.currentTimeMillis(),
+                    accountNumber = parsed.accountNumber,
+                    balance = parsed.balance,
+                    counterparty = parsed.counterparty,
+                    rawSms = parsed.rawSms
+                ))
+
+                // 출금 시 정산 자동확인 (이름 매칭)
+                if (parsed.transactionType == "출금" && parsed.counterparty.length >= 2) {
+                    val settleRepo = com.banktotal.app.data.repository.SettleRepository(applicationContext)
+                    settleRepo.autoConfirmSettle(parsed.counterparty, parsed.transactionAmount)
+                }
+
                 // 정산 브리핑 알림 (DB 저장 후 소계 반영된 상태에서)
                 SettleBriefingHelper.show(applicationContext, parsed)
             }

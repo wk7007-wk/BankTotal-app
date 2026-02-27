@@ -585,7 +585,10 @@ function deleteSettleItem(id){
     }
     renderSettle();
 }
+var _togLock=0;
 function toggleItem(k){
+    if(Date.now()-_togLock<300)return; // 더블 실행 방지 (touchend+click 동시 발화)
+    _togLock=Date.now();
     const s=ist(k);s.ex=!s.ex;
     s._ov=true; // 수동 override — 자동제외 덮어쓰기 방지
     btLog('[TOGGLE]',`${k} → ${s.ex?'제외':'포함'}`);

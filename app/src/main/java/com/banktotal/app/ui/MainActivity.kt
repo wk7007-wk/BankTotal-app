@@ -418,7 +418,11 @@ class MainActivity : AppCompatActivity() {
             text = if (isRecur) "오늘 삭제" else "삭제"
             setOnClickListener {
                 if (isRecur) {
-                    webView.evaluateJavascript("excludeDay('$key')", null)
+                    // 인라인 JS — 당일 숨김 (hid=true로 리스트에서 완전 제거)
+                    val safeKey = key.replace("'", "\\'")
+                    webView.evaluateJavascript(
+                        "try{var s=ist('$safeKey');s.hid=true;s.ex=true;s._ov=true;saveItemState();renderSettle();}catch(e){}", null
+                    )
                 } else {
                     webView.evaluateJavascript("deleteSettleItem('$id')", null)
                 }

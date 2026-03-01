@@ -362,6 +362,21 @@ function loadFromNative(){
         const json=NativeBridge.getAccountsJson();
         if(json){
             const list=JSON.parse(json);
+            if(list&&list.length){
+                accounts={};
+                list.forEach(a=>{
+                    const key=a.accountNumber||a.bankName||('acct_'+list.indexOf(a));
+                    accounts[key]={
+                        bank:a.bankName||'',
+                        account:a.displayName||a.accountNumber||'',
+                        balance:a.balance||0,
+                        bankName:a.bankName||'',
+                        accountNumber:a.accountNumber||'',
+                        updated:a.lastUpdated||0
+                    };
+                });
+                lsCache('accounts',accounts);
+            }
             renderNativeAccounts(list);
         }
     }catch(e){}

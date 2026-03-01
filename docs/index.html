@@ -1171,6 +1171,13 @@ function buildFinCtx(){
     const accs=Object.values(accounts);
     const totalBal=accs.reduce((s,a)=>s+(a.balance||0),0);
     let c='';
+    // 외부 AI 컨텍스트 파일 로드 (/sdcard/Download/BankTotal_ai_context.txt)
+    try{
+        if(typeof NativeBridge!=='undefined'&&NativeBridge.readTextFile){
+            const extCtx=NativeBridge.readTextFile('/sdcard/Download/BankTotal_ai_context.txt');
+            if(extCtx)c+=extCtx+'\n\n';
+        }
+    }catch(e){}
     if(aiRules.business){
         c+=`[사업 정보] ${aiRules.business}\n`;
         if(aiRules.income)c+='수입원: '+(Array.isArray(aiRules.income)?aiRules.income.join(', '):aiRules.income)+'\n';
@@ -1288,9 +1295,23 @@ async function _askAiInner(q){
     const sys=`당신은 BankTotal 입력 어시스턴트입니다. 주 역할은 항목등록과 규칙관리입니다.
 
 [핵심 역할 — 즉시 실행]
-- 항목 등록/삭제: 사용자가 말하면 바로 액션 실행. 확인은 한줄로 짧게.
+- 항목 등록/삭제/수정: 사용자가 말하면 바로 액션 실행. 확인은 한줄로 짧게.
 - 규칙 등록/수정: 사업정보, 분류규칙, 직원정보 등
 - 사진 분석: 고지서/영수증에서 금액 추출 → 등록
+
+[대화 맥락]
+- 이전 대화에서 언급된 금액, 항목, 날짜를 기억하고 연결하세요
+- "넣어줘", "수정해줘" 요청 시, 직전 대화에서 나온 금액을 자동으로 사용하세요
+- 금액을 이미 알려준 뒤 "그걸로 해줘", "넣어줘" 등이 오면 추가 질문 없이 실행하세요
+- 모르는 정보가 있을 때만 질문하세요
+
+[용어 이해]
+- 블락/블록/BLOCK/블랙박스/블랙라벨/블락박스 = SPA BLOCK 계좌 차단금액(절대값) (음성인식 오류 포함)
+- 물류 = SFA 물류비 정산항목
+- 보정/수정 = 기존 항목의 금액 등을 변경 (patch 액션 사용)
+- 사파/에스피에이/스파 = SPA (음성인식 오류)
+- 에스에프에이 = SFA (음성인식 오류)
+- 사용자는 음성입력 사용 — 오타/음성인식 오류 빈번. 문맥으로 의도 파악
 
 [재무분석은 요청시에만]
 "분석해줘", "어떻게 되나", "예측" 등 명시적 요청이 있을 때만 상세 분석.
@@ -1307,6 +1328,8 @@ ${ctx}
 - daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31), none=날짜미정(밀린금액)
 - 130만원→1300000 숫자변환 필수
 삭제: [ACTION]{"act":"del","name":"항목명"}[/ACTION]
+수정: [ACTION]{"act":"patch","name":"항목명","patch":{"amount":숫자}}[/ACTION]
+- patch 객체에 변경할 필드만 포함 (amount, cycle, day, txType 등)
 규칙추가: [ACTION]{"act":"add_rule","rule":"내용"}[/ACTION]
 규칙삭제: [ACTION]{"act":"del_rule","rule":"내용"}[/ACTION]
 정보수정: [ACTION]{"act":"set_info","key":"income/expenses/accounts/business/people","value":"값"}[/ACTION]
@@ -1315,7 +1338,17 @@ ${ctx}
 
     let body;
     try{
-        body=JSON.stringify({contents:[{parts:[{text:sys+'\n\n사용자: '+q}]}]});
+        const contents=[{role:'user',parts:[{text:sys}]},{role:'model',parts:[{text:'네, 준비됐습니다.'}]}];
+        // 이전 대화 맥락 추가 (최근 10턴, ACTION 태그 제거)
+        const hist=aiMessages.slice(0,-2);
+        const recent=hist.slice(-20);
+        for(const m of recent){
+            const clean=(m.text||'').replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+            if(!clean)continue;
+            contents.push({role:m.role==='user'?'user':'model',parts:[{text:clean}]});
+        }
+        contents.push({role:'user',parts:[{text:q}]});
+        body=JSON.stringify({contents});
     }catch(be){aiMessages[aiMessages.length-1].text='JSON에러:'+be.message;_aiDone(btn);return}
 
     const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key='+key;
@@ -1388,6 +1421,7 @@ async function analyzeBase64(base64,mime){
 고지서/청구서/영수증/은행명세서/카드내역 등 금융 문서라면:
 - 항목명, 금액, 납기일, 입금/출금 여부를 추출하세요
 - 정기 항목이면 등록 액션을 추가하세요
+- 기존 항목과 금액이 다르면, 수정이 필요할 수 있음을 알려주세요. 단, 이미지 분석에서는 [ACTION] 태그로 patch를 직접 실행하지 마세요. 사용자에게 '○○ 항목이 XX원인데, YY원으로 수정할까요?' 형태로 질문하세요.
 금융 문서가 아니면 이미지 내용을 간단히 설명하세요.
 
 ${ctx}
@@ -1406,7 +1440,7 @@ ${ctx}
         const d=await r.json();
         let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'분석 실패';
         const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
-        for(const m of actionMatches){try{await executeAiAction(JSON.parse(m[1]))}catch(e){}}
+        for(const m of actionMatches){try{const a=JSON.parse(m[1]);if(a.act==='patch')continue;await executeAiAction(a)}catch(e){}}
         if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
         aiMessages[aiMessages.length-1].text=reply;
     }catch(e){
@@ -1439,6 +1473,7 @@ async function analyzeImage(input){
 고지서/청구서/영수증/은행명세서/카드내역 등 금융 문서라면:
 - 항목명, 금액, 납기일, 입금/출금 여부를 추출하세요
 - 정기 항목이면 등록 액션을 추가하세요
+- 기존 항목과 금액이 다르면, 수정이 필요할 수 있음을 알려주세요. 단, 이미지 분석에서는 [ACTION] 태그로 patch를 직접 실행하지 마세요. 사용자에게 '○○ 항목이 XX원인데, YY원으로 수정할까요?' 형태로 질문하세요.
 
 ${ctx}
 
@@ -1459,7 +1494,7 @@ ${ctx}
             let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'분석 실패';
             const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
             for(const m of actionMatches){
-                try{await executeAiAction(JSON.parse(m[1]))}catch(e){}
+                try{const a=JSON.parse(m[1]);if(a.act==='patch')continue;await executeAiAction(a)}catch(e){}
             }
             if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
             aiMessages[aiMessages.length-1].text=reply;
@@ -1511,6 +1546,31 @@ async function executeAiAction(act){
             markLocalEdit();
             aiMessages[aiMessages.length-1].text+=' ('+targets.length+'건 삭제)';
         }
+    }else if(act.act==='patch'){
+        // 이름으로 항목 찾기 (부분 매칭 — del과 동일 패턴)
+        const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
+        if(!targets.length){aiMessages[aiMessages.length-1].text+=' (일치 항목 없음)';return}
+        const t=targets[0];
+        const patch=act.patch||{};
+        // 허용 필드만 적용
+        const allowed=['amount','cycle','day','dayOfWeek','dayOfMonth','txType','type','name'];
+        const fbPatch={};
+        for(const k of Object.keys(patch)){
+            if(allowed.includes(k)){
+                if(k==='txType'){t.type=patch[k];fbPatch.type=patch[k]}
+                else{t[k]=patch[k];fbPatch[k]=patch[k]}
+            }
+        }
+        // 로컬 먼저 저장
+        lsCache('settle_manual',settleManual);
+        markLocalEdit();
+        // Firebase PATCH — 변경 필드만 전송
+        await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbPatch)});
+        // Room DB 동기화
+        try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(t))}catch(e){}
+        btLog('[PATCH]',`${t.name} ${JSON.stringify(patch)} AI수정`);
+        aiMessages[aiMessages.length-1].text+=' (수정완료: '+t.name+')';
+        if(currentTab==='settle')renderSettle();
     }else if(act.act==='add_rule'){
         const rules=aiRules.rules||[];
         rules.push(act.rule);

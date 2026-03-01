@@ -1257,16 +1257,37 @@ function buildFinCtx(){
 }
 
 // --- 로컬 파서: 단순 명령은 Gemini 없이 즉시 처리 ---
+// 음성인식 띄어쓰기 보정 사전 (흔한 음성입력 오류)
+const _voiceFixMap={'관 리비':'관리비','월 세':'월세','보 험료':'보험료','전 기세':'전기세','수 도세':'수도세',
+    '가 스비':'가스비','인 터넷':'인터넷','핸드 폰':'핸드폰','휴대 폰':'휴대폰','통 신비':'통신비',
+    '교 통비':'교통비','식 비':'식비','보 험':'보험','적 금':'적금','대 출':'대출','이 자':'이자',
+    '카 드값':'카드값','카 드비':'카드비','아 파트':'아파트','주 차비':'주차비','교 육비':'교육비',
+    '학 원비':'학원비','관리 비':'관리비','전기 세':'전기세','수도 세':'수도세','가스 비':'가스비',
+    '통신 비':'통신비','교통 비':'교통비','보험 료':'보험료','핸드폰 비':'핸드폰비','휴대폰 비':'휴대폰비'};
+// 정기항목 → cycle=monthly 자동 판별
+const _monthlyItems=['관리비','월세','보험료','전기세','수도세','가스비','인터넷','핸드폰','휴대폰',
+    '통신비','아파트','카드값','카드비','대출','이자','적금','학원비','교육비','보험'];
+function _fixVoiceSpacing(s){
+    let r=s;
+    for(const[k,v]of Object.entries(_voiceFixMap))r=r.replace(new RegExp(k,'g'),v);
+    // 일반 패턴: 한글 1글자 + 공백 + 한글 2글자 이상 → 붙이기 (예: "관 리비" → "관리비")
+    r=r.replace(/([가-힣])\s([가-힣]{2,})/g,(m,a,b)=>{const w=a+b;if(_monthlyItems.includes(w)||w.length<=4)return w;return m;});
+    return r;
+}
 function parseLocalCmd(q){
-    // 금액 파싱: "260만" → 2600000, "5만" → 50000, "1300000" → 1300000
+    // 음성인식 띄어쓰기 보정
+    q=_fixVoiceSpacing(q);
+    // 금액 파싱: "260만" → 2600000, "15만원" → 150000, "5만" → 50000, "1300000" → 1300000
     function parseAmt(s){
-        const m=s.match(/(\d+(?:\.\d+)?)\s*만/);if(m)return Math.round(parseFloat(m[1])*10000);
+        const m=s.match(/(\d+(?:\.\d+)?)\s*만\s*원?/);if(m)return Math.round(parseFloat(m[1])*10000);
         const n=s.match(/(\d{4,})/);if(n)return parseInt(n[1]);
         return 0;
     }
     const amt=parseAmt(q);if(!amt)return null;
-    const isIn=/입금/.test(q);const isOut=/출금|지출/.test(q);
-    const txType=isIn?'입금':isOut?'출금':(amt>0?'출금':'출금');
+    // 동작어로 입출금 타입 판별
+    const isIn=/입금|받았|들어왔|들어옴|넣었/.test(q);
+    const isOut=/출금|지출|냈어|냈다|차감|빠졌|빼줘|빼 줘|나갔|나감|지불|결제|납부/.test(q);
+    const txType=isIn?'입금':isOut?'출금':'출금';
     // 주기
     let cycle='none',day=0,date=null;
     if(/매일|매일/.test(q))cycle='daily';
@@ -1275,9 +1296,14 @@ function parseLocalCmd(q){
     else if(/내일/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+1);date=t.toISOString().slice(0,10);}
     else if(/모레/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+2);date=t.toISOString().slice(0,10);}
     else if(q.match(/(\d{1,2})\/(\d{1,2})/)){const dm=q.match(/(\d{1,2})\/(\d{1,2})/);cycle='once';const y=new Date().getFullYear();date=`${y}-${dm[1].padStart(2,'0')}-${dm[2].padStart(2,'0')}`;}
-    // 이름 추출: 금액/주기/타입 키워드 제거 후 남은 텍스트
-    let name=q.replace(/\d+(?:\.\d+)?\s*만|\d{4,}|입금|출금|지출|매일|매주|매월|내일|모레|등록|해줘|해 줘|원|[월화수목금토일]요?일?|\d{1,2}\/\d{1,2}/g,'').trim();
+    // 이름 추출: 금액/주기/타입/동작어/부사 제거 후 남은 핵심 명사만
+    let name=q.replace(/\d+(?:\.\d+)?\s*만\s*원?|\d{4,}|입금|출금|지출|매일|매주|매월|내일|모레|등록|해줘|해 줘|원|[월화수목금토일]요?일?|\d{1,2}\/\d{1,2}/g,'')
+        .replace(/냈어|냈다|넣어|넣었|빼줘|빼 줘|빠졌|나갔|나감|차감|받았|들어왔|들어옴|지불|결제|납부|했어|했다|좀|으로|에서|이거|그거|그걸|이번|이번달|이번 달|달에|개월|오늘|해주세요|줘|요|을|를|이|가|에|도|한|좀|다|고/g,'').trim();
+    // 남은 공백 제거 (단어 사이 불필요한 공백)
+    name=name.replace(/\s+/g,'').trim();
     if(!name)name=txType;
+    // 정기항목 자동 cycle=monthly 판별 (명시적 주기 지정 없을 때만)
+    if(cycle==='none'&&_monthlyItems.some(mi=>name.includes(mi)))cycle='monthly';
     const act={act:'add',name,amount:amt,txType,cycle};
     if(cycle==='weekly')act.day=day;
     if(cycle==='monthly')act.day=day||1;
@@ -1335,6 +1361,31 @@ async function _askAiInner(q){
 - 규칙 등록/수정: 사업정보, 분류규칙, 직원정보 등
 - 사진 분석: 고지서/영수증에서 금액 추출 → 등록
 
+[항목명 추출 규칙 — 필수 준수]
+사용자의 자연어에서 항목명(name)을 추출할 때:
+1. 동작어는 항목명에서 제외: 냈어,냈다,넣어,넣었,빼줘,빠졌,나갔,차감,받았,들어왔,지불,결제,납부,했어,했다,줘,해줘
+2. 금액 표현은 항목명에서 제외: 15만원,260만,1300000 등
+3. 부사/조사는 항목명에서 제외: 좀,오늘,이번달,으로,에서
+4. 남은 핵심 명사만 항목명으로 사용
+5. 예시: "관리비 15만원 냈어 차감" → name="관리비", "월세 50만원 빠졌어" → name="월세"
+
+[음성입력 띄어쓰기 보정]
+사용자는 음성입력(Gboard)을 사용하여 띄어쓰기 오류가 빈번합니다:
+- "관 리비"→"관리비", "월 세"→"월세", "보 험료"→"보험료", "전 기세"→"전기세"
+- "수 도세"→"수도세", "가 스비"→"가스비", "인 터넷"→"인터넷", "통 신비"→"통신비"
+- 불필요한 공백을 제거하고 올바른 단어로 합쳐서 사용하세요
+
+[정기항목 cycle 자동 판별]
+다음 항목은 명시적 주기 지정이 없어도 cycle="monthly"로 설정:
+관리비,월세,보험료,전기세,수도세,가스비,인터넷,핸드폰,휴대폰,통신비,카드값,카드비,대출,이자,적금,학원비,교육비,보험,아파트
+- "관리비 15만원 냈어" → cycle="monthly" (매월 반복)
+- 명시적으로 "한번만","일회성" 등이 있으면 cycle="none"
+
+[입출금 타입 판별]
+- 출금 동작어: 냈어,냈다,차감,빠졌,빼줘,나갔,지불,결제,납부 → txType="출금"
+- 입금 동작어: 받았,들어왔,들어옴,넣었,입금 → txType="입금"
+- 동작어가 없으면 기본값 txType="출금"
+
 [대화 맥락]
 - 이전 대화에서 언급된 금액, 항목, 날짜를 기억하고 연결하세요
 - "넣어줘", "수정해줘" 요청 시, 직전 대화에서 나온 금액을 자동으로 사용하세요
@@ -1363,6 +1414,7 @@ ${ctx}
 등록: [ACTION]{"act":"add","name":"항목명","amount":숫자,"txType":"입금/출금","cycle":"daily/weekly/monthly/none","day":숫자}[/ACTION]
 - daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31), none=날짜미정(밀린금액)
 - 130만원→1300000 숫자변환 필수
+- name에는 핵심 명사만 (동작어/금액/부사 제외)
 삭제: [ACTION]{"act":"del","name":"항목명"}[/ACTION]
 수정: [ACTION]{"act":"patch","name":"항목명","patch":{"amount":숫자}}[/ACTION]
 - patch 객체에 변경할 필드만 포함 (amount, cycle, day, txType 등)

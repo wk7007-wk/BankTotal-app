@@ -300,7 +300,7 @@ function connectSSE(path,handler){
 }
 
 function initSSE(){
-    connectSSE('/banktotal/accounts',d=>{accounts=d||{};lsCache('accounts',accounts);renderAccounts();if(currentTab==='settle')renderSettle()});
+    connectSSE('/banktotal/accounts',d=>{accounts=d||{};lsCache('accounts',accounts);renderAccounts();autoSyncSfaDaily();if(currentTab==='settle')renderSettle()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
         const prev=transactions.length;
@@ -390,6 +390,7 @@ function loadFromNative(){
             if(currentTab==='settle')renderSettle();
         }
     }catch(e){}
+    autoSyncSfaDaily();
     return true;
 }
 
@@ -860,6 +861,22 @@ function renderSettle(){
     el.innerHTML=html;
 }
 
+function autoSyncSfaDaily(){
+    // BLOCK 계좌 잔고 → 당일 sfaDaily 자동 동기화 (계좌 데이터 갱신 시 호출)
+    const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
+    if(!blockAcct||blockAcct.balance===undefined)return;
+    const amt=Math.abs(blockAcct.balance);
+    if(amt===0)return; // 0값은 보정 대상 아님
+    const now=new Date();
+    const key=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0')+'-'+now.getDate().toString().padStart(2,'0');
+    // 이미 같은 금액이면 스킵
+    if(sfaDaily[key]&&sfaDaily[key].amount===amt)return;
+    sfaDaily[key]={amount:amt,ts:Date.now()};
+    lsCache('sfa_daily',sfaDaily);
+    try{if(_hasNB)NativeBridge.saveSfaDailyNative(key,amt)}catch(e){}
+    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
+    if(currentTab==='settle')renderSettle();
+}
 function editSfaDaily(key,cur){
     // BBQ BLOCK 계좌에서 자동 동기화
     const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
@@ -1701,7 +1718,7 @@ function doRefresh(){
     if(transactions.length)lsCache('transactions_raw',transactions);
     // 2) Firebase에서 계좌/거래만 최신 갱신 (settle/SFA는 로컬 유지)
     fetch(FB+'/banktotal/accounts.json').then(r=>r.json()).then(d=>{
-        if(d){accounts=d;lsCache('accounts',accounts);renderAccounts();if(currentTab==='settle')renderSettle();}
+        if(d){accounts=d;lsCache('accounts',accounts);renderAccounts();autoSyncSfaDaily();if(currentTab==='settle')renderSettle();}
     }).catch(()=>{});
     fetch(FB+'/banktotal/transactions.json').then(r=>r.json()).then(d=>{
         if(d){transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));lsCache('transactions',d);renderLedger();}

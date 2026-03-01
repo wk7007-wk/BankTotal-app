@@ -227,11 +227,9 @@ class MainActivity : AppCompatActivity() {
         fun captureScreen() {
             runOnUiThread {
                 try {
-                    val scale = webView.scale
-                    val fullHeight = (webView.contentHeight * scale).toInt()
-                    val height = maxOf(webView.height, fullHeight)
-                    val bitmap = android.graphics.Bitmap.createBitmap(webView.width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    val bitmap = android.graphics.Bitmap.createBitmap(webView.width, webView.height, android.graphics.Bitmap.Config.ARGB_8888)
                     val canvas = android.graphics.Canvas(bitmap)
+                    canvas.translate(0f, -webView.scrollY.toFloat())
                     webView.draw(canvas)
                     val file = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "BankTotal_capture.png")
                     java.io.FileOutputStream(file).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, it) }
@@ -239,6 +237,26 @@ class MainActivity : AppCompatActivity() {
                     android.widget.Toast.makeText(this@MainActivity, "캡처 저장됨", android.widget.Toast.LENGTH_SHORT).show()
                 } catch (_: Exception) {
                     android.widget.Toast.makeText(this@MainActivity, "캡처 실패", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun captureFullPage() {
+            runOnUiThread {
+                try {
+                    val scale = webView.scale
+                    val fullHeight = (webView.contentHeight * scale).toInt()
+                    val height = maxOf(webView.height, fullHeight)
+                    val bitmap = android.graphics.Bitmap.createBitmap(webView.width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bitmap)
+                    webView.draw(canvas)
+                    val file = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "BankTotal_fullpage.png")
+                    java.io.FileOutputStream(file).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, it) }
+                    bitmap.recycle()
+                    android.widget.Toast.makeText(this@MainActivity, "전체 캡처 저장됨", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(this@MainActivity, "전체 캡처 실패", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -399,6 +417,12 @@ class MainActivity : AppCompatActivity() {
         fun showItemMenu(key: String, id: String, amount: Long, isSfa: Boolean, sfaKey: String, cycle: String) {
             runOnUiThread { showNativeBottomSheet(key, id, amount, isSfa, sfaKey, cycle) }
         }
+
+        /** 텍스트 파일 읽기 (AI 컨텍스트 파일 등) */
+        @JavascriptInterface
+        fun readTextFile(path: String): String = try {
+            File(path).readText(Charsets.UTF_8)
+        } catch (_: Exception) { "" }
     }
 
     // --- 네이티브 BottomSheet (WebView 터치 문제 근본 해결) ---

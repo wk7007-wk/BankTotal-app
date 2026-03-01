@@ -1550,27 +1550,19 @@ async function executeAiAction(act){
         // 이름으로 항목 찾기 (부분 매칭 — del과 동일 패턴)
         const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
         if(!targets.length){aiMessages[aiMessages.length-1].text+=' (일치 항목 없음)';return}
-        const t=targets[0];
-        const patch=act.patch||{};
-        // 허용 필드만 적용
-        const allowed=['amount','cycle','day','dayOfWeek','dayOfMonth','txType','type','name'];
-        const fbPatch={};
-        for(const k of Object.keys(patch)){
-            if(allowed.includes(k)){
-                if(k==='txType'){t.type=patch[k];fbPatch.type=patch[k]}
-                else{t[k]=patch[k];fbPatch[k]=patch[k]}
+        if(targets.length>1){
+            // 다중 매칭 → 선택 버튼 표시
+            _pendingPatch=act.patch||{};
+            let btnHtml='<div style="margin-top:8px">어느 항목을 수정할까요?<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">';
+            for(const t of targets){
+                btnHtml+=`<button onclick="executePatchOnItem('${t._id}')" style="background:#1a237e;color:#fff;border:none;border-radius:8px;padding:8px 16px;margin:4px;font-size:13px;cursor:pointer;touch-action:manipulation">${t.name} ${fmt(t.amount)}원</button>`;
             }
+            btnHtml+='</div></div>';
+            aiMessages[aiMessages.length-1].text+=btnHtml;
+            return;
         }
-        // 로컬 먼저 저장
-        lsCache('settle_manual',settleManual);
-        markLocalEdit();
-        // Firebase PATCH — 변경 필드만 전송
-        await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbPatch)});
-        // Room DB 동기화
-        try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(t))}catch(e){}
-        btLog('[PATCH]',`${t.name} ${JSON.stringify(patch)} AI수정`);
-        aiMessages[aiMessages.length-1].text+=' (수정완료: '+t.name+')';
-        if(currentTab==='settle')renderSettle();
+        _pendingPatch=act.patch||{};
+        await executePatchOnItem(targets[0]._id);
     }else if(act.act==='add_rule'){
         const rules=aiRules.rules||[];
         rules.push(act.rule);
@@ -1585,6 +1577,47 @@ async function executeAiAction(act){
         await fetch(FB+'/banktotal/ai_rules/'+act.key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)});
         aiRules[act.key]=val;
     }
+}
+
+let _pendingPatch={};
+async function executePatchOnItem(itemId){
+    const t=settleManual.find(m=>m._id===itemId);
+    if(!t){return}
+    const patch=_pendingPatch;
+    const oldAmount=t.amount;
+    // 허용 필드만 적용
+    const allowed=['amount','cycle','day','dayOfWeek','dayOfMonth','txType','type','name'];
+    const fbPatch={};
+    for(const k of Object.keys(patch)){
+        if(allowed.includes(k)){
+            if(k==='txType'){t.type=patch[k];fbPatch.type=patch[k]}
+            else{t[k]=patch[k];fbPatch[k]=patch[k]}
+        }
+    }
+    // 로컬 먼저 저장
+    lsCache('settle_manual',settleManual);
+    markLocalEdit();
+    // Firebase PATCH — 변경 필드만 전송
+    await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbPatch)});
+    // Room DB 동기화
+    try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(t))}catch(e){}
+    btLog('[PATCH]',`${t.name} ${JSON.stringify(patch)} AI수정`);
+    // 수정 결과 toast 배너
+    if(patch.amount!==undefined){
+        showPatchToast(t.name,oldAmount,patch.amount);
+    }
+    aiMessages[aiMessages.length-1].text=aiMessages[aiMessages.length-1].text.replace(/<div style="margin-top:8px">[\s\S]*<\/div><\/div>/,'') + ' (수정완료: '+t.name+')';
+    _pendingPatch={};
+    renderAiMsgs();
+    if(currentTab==='settle')renderSettle();
+}
+
+function showPatchToast(name,oldAmt,newAmt){
+    const fb=document.createElement('div');
+    fb.textContent=name+': '+fmt(oldAmt)+'원 → '+fmt(newAmt)+'원';
+    fb.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#4caf5033;color:#e0e0e0;border-left:3px solid #4caf50;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:999;max-width:90%;text-align:center;';
+    document.body.appendChild(fb);
+    setTimeout(()=>fb.remove(),3000);
 }
 
 function delAiPair(pi){

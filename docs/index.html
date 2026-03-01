@@ -7,15 +7,18 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
-.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:sticky;top:0;z-index:10}
-.subtotal-row{color:#aaa;font-size:14px;margin-bottom:2px;display:none}
+.header{background:#1a1a2e;padding:20px 16px;text-align:center;position:relative}
+.refresh-btn{position:absolute;top:16px;right:12px;background:#333;border:none;color:#4fc3f7;font-size:20px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.refresh-btn:active{background:#444}
+.refresh-btn.spinning{animation:spin .6s linear}
+.subtotal-row{color:#fff;font-size:14px;margin-bottom:2px;display:none}
 .subtotal-row.show{display:block}
-.subtotal-val{font-size:18px;color:#bbb}
-.total-label{color:#888;font-size:14px;margin-top:4px}
-.total-val{font-size:32px;font-weight:bold;color:#fff;margin:4px 0}
+.subtotal-val{font-size:32px;font-weight:bold;color:#4fc3f7}
+.total-label{color:#666;font-size:12px;margin-top:4px}
+.total-val{font-size:16px;color:#4fc3f7;margin:2px 0}
 .last-update{color:#666;font-size:12px}
-.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:0;z-index:9}
-.tab{flex:1;min-width:60px;padding:10px 8px;text-align:center;font-size:13px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.tabs{display:flex;background:#1e1e30;overflow-x:auto;position:sticky;top:34px;z-index:9}
+.tab{flex:1;min-width:70px;padding:14px 12px;text-align:center;font-size:14px;color:#888;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
 .tab.active{color:#4fc3f7;border-bottom-color:#4fc3f7}
 .section{display:none;padding:12px}
 .section.active{display:block}
@@ -41,9 +44,12 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .tx-cp{font-size:13px;color:#ccc}
 .tx-time{font-size:10px;color:#555}
 .tx-amount{font-size:15px;font-weight:bold;text-align:right}
-.tx-amount.in{color:#4caf50}
+.tx-amount.in{color:#4fc3f7}
 .tx-amount.out{color:#ef5350}
 .tx-balance{font-size:10px;color:#666;text-align:right}
+.tx-item.excluded{opacity:.35}
+.tx-item.excluded .tx-amount{text-decoration:line-through}
+.tx-excluded-tag{font-size:9px;color:#666;background:#333;padding:1px 5px;border-radius:4px;margin-left:4px}
 .cat-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a}
 .cat-name{font-size:14px;color:#ccc}
 .cat-count{font-size:11px;color:#666}
@@ -67,40 +73,83 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .summary-row{display:flex;gap:8px}
 .summary-row .summary-box{flex:1}
 .empty{text-align:center;color:#555;padding:40px 0;font-size:14px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .version{text-align:center;color:#444;font-size:11px;padding:20px 0}
+.settle-tag{font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px}
+.settle-tag.manual{color:#4fc3f7;background:#4fc3f722}
+.settle-tag.auto{color:#ff9800;background:#ff980022}
+.predicted-bal{font-size:11px;color:#888;float:right}
+.ai-msgs{max-height:300px;overflow-y:auto;margin:8px 0}
+.ai-msg{padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:13px;line-height:1.6;white-space:pre-wrap}
+.ai-msg.user{background:#4fc3f722;color:#4fc3f7;text-align:right}
+.ai-msg.bot{background:#2a2a40;color:#e0e0e0}
+.ai-pair{position:relative;overflow:hidden;margin-bottom:6px;border-radius:10px;background:#1e1e30;transition:transform .2s}
+.ai-pair .ap-q{padding:6px 10px;font-size:12px;color:#4fc3f7;border-bottom:1px solid #2a2a45}
+.ai-pair .ap-a{padding:8px 10px;font-size:13px;color:#e0e0e0;line-height:1.5;white-space:pre-wrap}
+.ai-pair .ap-del{position:absolute;right:0;top:0;bottom:0;width:60px;background:#ef5350;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:bold}
+.ap-copy{font-size:11px;color:#888;cursor:pointer;float:right;margin-top:4px;padding:2px 6px;border-radius:4px;user-select:none;-webkit-tap-highlight-color:transparent}
+.ap-copy:active{background:#333;color:#4fc3f7}
+.ap-acct{color:#4fc3f7;text-decoration:underline;text-decoration-style:dotted;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ap-acct:active{background:#4fc3f722;border-radius:3px}
+.ai-input-row{display:flex;gap:6px}
+.ai-input{flex:1;padding:10px;background:#2a2a40;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;outline:none}
+.ai-send{padding:10px 16px;background:#4fc3f7;color:#121212;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer}
+.ai-send:disabled{opacity:.4}
 </style>
 </head>
 <body>
 
 <div class="header" id="header">
+    <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
+    <span id="appVer" style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;color:#555"></span>
     <div class="subtotal-row" id="subtotalRow">
-        소계 <span class="subtotal-val" id="subtotalVal">0</span>
+        <div style="color:#888;font-size:12px">소계</div>
+        <span class="subtotal-val" id="subtotalVal">0</span>
     </div>
-    <div class="total-label">합계</div>
+    <div class="total-label">합산</div>
     <div class="total-val" id="totalVal">0</div>
     <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
 </div>
 
+<div id="aiBar" style="background:#1a1a2e;padding:4px 8px;display:flex;gap:4px;align-items:center;position:sticky;top:0;z-index:10">
+    <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="analyzeImage(this)">
+    <button onclick="loadLatestImage()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">사진</button>
+    <button onclick="if(window.NativeBridge)NativeBridge.captureScreen()" style="padding:4px 6px;background:#2a2a40;border:1px solid #333;border-radius:6px;color:#aaa;font-size:10px;cursor:pointer;white-space:nowrap">캡처</button>
+    <input class="ai-input" id="aiInput" placeholder="항목등록, 질문, 사진..." autocomplete="off" style="font-size:12px;padding:6px 8px;flex:1">
+    <button class="ai-send" id="aiSendBtn" onclick="askAi()" style="padding:5px 10px;font-size:12px">AI</button>
+    <span id="aiToggle" onclick="toggleAiMsgs()" style="color:#707088;font-size:14px;cursor:pointer;padding:0 4px">&#9660;</span>
+</div>
+<div class="ai-msgs" id="aiMsgs" style="display:none;max-height:250px;margin:0 8px"></div>
+
 <div class="tabs">
-    <div class="tab active" onclick="showTab('accounts')">계좌</div>
-    <div class="tab" onclick="showTab('ledger')">가계부</div>
-    <div class="tab" onclick="showTab('logs')">로그</div>
-    <div class="tab" onclick="showTab('perms')">권한</div>
+    <div class="tab active" data-tab="settle" onclick="showTab('settle')">정산</div>
+    <div class="tab" data-tab="accounts" onclick="showTab('accounts')">계좌</div>
+    <div class="tab" data-tab="ledger" onclick="showTab('ledger')">가계부</div>
 </div>
 
-<div class="section active" id="sec-accounts">
+<div class="section" id="sec-accounts">
     <div id="accountList"></div>
 </div>
 
 <div class="section" id="sec-ledger">
     <div class="filter-row" id="ledgerFilter">
-        <div class="filter-btn active" onclick="setLedgerFilter('all')">전체</div>
+        <div class="filter-btn active" onclick="setLedgerFilter('out')">출금</div>
         <div class="filter-btn" onclick="setLedgerFilter('in')">입금</div>
-        <div class="filter-btn" onclick="setLedgerFilter('out')">출금</div>
+        <div class="filter-btn" onclick="setLedgerFilter('all')">전체</div>
         <div class="filter-btn" onclick="setLedgerFilter('cat')">카테고리</div>
     </div>
     <div id="ledgerSummary"></div>
     <div id="ledgerContent"></div>
+</div>
+
+<div class="section active" id="sec-settle">
+    <div id="settleSummary" style="position:sticky;top:78px;z-index:8;background:#121212;padding-bottom:2px"></div>
+    <div id="settleContent"></div>
+    <div style="margin-top:12px;display:flex;gap:6px">
+        <div class="card" onclick="showTab('logs')" style="cursor:pointer;text-align:center;font-size:11px;color:#4fc3f7;flex:1;padding:8px">로그</div>
+        <div class="card" onclick="showTab('perms')" style="cursor:pointer;text-align:center;font-size:11px;color:#4fc3f7;flex:1;padding:8px">권한</div>
+        <div class="card" onclick="promptAiKey()" style="cursor:pointer;text-align:center;font-size:11px;color:#888;flex:1;padding:8px" id="aiKeyBtn">API키</div>
+    </div>
 </div>
 
 <div class="section" id="sec-logs">
@@ -127,42 +176,187 @@ const tsFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padSt
 const dateFmt=ts=>{const d=new Date(ts);return`${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`};
 const timeFmt=ts=>{const d=new Date(ts);return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`};
 
-let accounts={},transactions=[],logs=[],currentTab='accounts',ledgerMode='all',logFilterTag='all';
+let accounts={},transactions=[],logs=[],settleManual=[],settleAuto=[],aiRules={},sfaDaily={},currentTab='settle',ledgerMode='out',logFilterTag='all';
+
+// --- localStorage = 주 데이터 / Firebase = 백업 ---
+const BT_DATA_VER='2';
+function lsCache(key,data){try{localStorage.setItem('bt_'+key,JSON.stringify(data))}catch(e){}}
+function lsLoad(key){try{const s=localStorage.getItem('bt_'+key);return s?JSON.parse(s):null}catch(e){return null}}
+let _localEditTs=0; // 로컬 수정 후 300초간 Firebase 덮어쓰기 방지
+function markLocalEdit(){_localEditTs=Date.now();lsCache('_localEditTs',_localEditTs);}
+function isLocalEditRecent(){
+    if(!_localEditTs){const saved=lsLoad('_localEditTs');if(saved)_localEditTs=saved;}
+    return Date.now()-_localEditTs<300000;
+}
+function checkDataVersion(){
+    const v=localStorage.getItem('bt_data_ver');
+    if(v!==BT_DATA_VER){
+        // 버전 변경 → 기존 로컬 데이터 백업
+        const backup={};
+        ['accounts','transactions','settle_manual','sfa_daily','settleItemState'].forEach(k=>{
+            const d=localStorage.getItem('bt_'+k)||localStorage.getItem(k);
+            if(d)backup[k]=d;
+        });
+        if(Object.keys(backup).length){
+            localStorage.setItem('bt_backup_v'+(v||'1'),JSON.stringify(backup));
+        }
+        localStorage.setItem('bt_data_ver',BT_DATA_VER);
+        return true; // 1회 Firebase 동기화 허용
+    }
+    return false;
+}
+let _needsFirebaseSync=false;
+function loadCachedData(){
+    _needsFirebaseSync=checkDataVersion();
+    const ca=lsLoad('accounts');if(ca){accounts=ca;renderAccounts();}
+    const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.values(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
+    // Room DB 우선: NativeBridge 있으면 Room에서 settle/sfa 로드
+    let roomLoaded=false;
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            if(NativeBridge.hasRoomData()){
+                const si=NativeBridge.getSettleItemsJson();
+                if(si){settleManual=JSON.parse(si);roomLoaded=true;}
+                const sf=NativeBridge.getSfaDailyJson();
+                if(sf){sfaDaily=JSON.parse(sf);roomLoaded=true;}
+            }
+        }catch(e){}
+    }
+    if(!roomLoaded){
+        // Room 없으면 localStorage fallback
+        const cm=lsLoad('settle_manual');if(cm){settleManual=cm;}
+        const cs=lsLoad('sfa_daily');if(cs){sfaDaily=cs;}
+    }
+    if(settleManual.length||Object.keys(sfaDaily).length)renderSettle();
+}
+
+// --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
+function markTransactions(txList){
+    const sorted=[...txList].sort((a,b)=>(a.ts||0)-(b.ts||0));
+    // 1) 동일계좌 이체 (동일금액+5분내+다른은행+입출금반대)
+    for(let i=0;i<sorted.length;i++){
+        for(let j=i+1;j<sorted.length;j++){
+            const a=sorted[i],b=sorted[j];
+            if(Math.abs((a.ts||0)-(b.ts||0))>300000)break;
+            if(a.amount===b.amount&&a.type!==b.type&&a.bank!==b.bank&&!a._excluded&&!b._excluded){
+                a._excluded=true;a._reason='이체';
+                b._excluded=true;b._reason='이체';
+                break;
+            }
+        }
+    }
+    // 2) 중복 (같은 은행+금액+타입, 60초 이내)
+    for(let i=0;i<sorted.length;i++){
+        if(sorted[i]._excluded)continue;
+        for(let j=i+1;j<sorted.length;j++){
+            const a=sorted[i],b=sorted[j];
+            if(Math.abs((a.ts||0)-(b.ts||0))>60000)break;
+            if(a.bank===b.bank&&a.amount===b.amount&&a.type===b.type&&!b._excluded){
+                b._excluded=true;b._reason='중복';
+            }
+        }
+    }
+    return sorted;
+}
 
 // --- 탭 관리 ---
 function showTab(name){
     currentTab=name;
-    document.querySelectorAll('.tab').forEach((t,i)=>{
-        t.classList.toggle('active',['accounts','ledger','logs','perms'][i]===name);
+    document.querySelectorAll('.tab').forEach(t=>{
+        const tn=t.getAttribute('data-tab')||'';
+        t.classList.toggle('active',tn===name||(name==='logs'&&tn==='settle')||(name==='perms'&&tn==='settle'));
     });
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+name).classList.add('active');
     if(name==='perms')renderPermissions();
+    if(name==='settle')renderSettle();
 }
 
 // --- Firebase SSE ---
 function connectSSE(path,handler){
+    let cache=null;
     const es=new EventSource(FB+path+'.json');
-    es.onmessage=e=>{
-        try{handler(JSON.parse(e.data));}catch(ex){}
-    };
+    // Firebase SSE는 named event ('put','patch')로 전송 → addEventListener 사용
+    es.addEventListener('put',e=>{
+        try{
+            const msg=JSON.parse(e.data);
+            if(msg.path==='/'){
+                cache=msg.data;
+                handler(cache);
+            }else{
+                // 부분 업데이트: 키 머지
+                const key=msg.path.replace(/^\//,'');
+                if(cache&&key){
+                    if(msg.data===null){delete cache[key];}else{cache[key]=msg.data;}
+                    handler(cache);
+                }else{
+                    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{cache=d;handler(d);}).catch(()=>{});
+                }
+            }
+        }catch(ex){}
+    });
+    es.addEventListener('patch',e=>{
+        fetch(FB+path+'.json').then(r=>r.json()).then(d=>{cache=d;handler(d);}).catch(()=>{});
+    });
     es.onerror=()=>{setTimeout(()=>connectSSE(path,handler),5000);es.close()};
     // 초기 로드 (SSE put 이벤트 전에 REST로 즉시 로드)
-    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{if(d)handler(d);}).catch(()=>{});
+    fetch(FB+path+'.json').then(r=>r.json()).then(d=>{if(d){cache=d;handler(d);}}).catch(()=>{});
 }
 
 function initSSE(){
-    connectSSE('/banktotal/accounts',d=>{accounts=d||{};renderAccounts()});
+    connectSSE('/banktotal/accounts',d=>{accounts=d||{};lsCache('accounts',accounts);renderAccounts();autoSyncSfaDaily();if(currentTab==='settle')renderSettle()});
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
-        transactions=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        const prev=transactions.length;
+        transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        lsCache('transactions',d);
         renderLedger();
+        // 새 출금 거래 발생 시 당일 정산 자동확인 + AI 보정
+        if(transactions.length>prev&&prev>0){
+            const sfaNames=['제네시스','genesis','올원오픈주','토스(주)제','(주)제'];
+            const newTxs=transactions.slice(0,transactions.length-prev);
+            const newOut=newTxs.filter(t=>t.type==='출금'&&!sfaNames.some(s=>(t.counterparty||'').includes(s)));
+            if(newOut.length){autoConfirmSettle(newOut);checkSettleCorrection(newOut);}
+        }
     });
     connectSSE('/banktotal/logs',d=>{
         if(!d){logs=[];renderLogs();return;}
         logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));
         renderLogs();
     });
+    // Room DB 사용 시 settle/sfa SSE 불필요 (Room이 Single Source of Truth)
+    const _useRoom=typeof NativeBridge!=='undefined'&&NativeBridge.hasRoomData();
+    if(!_useRoom){
+        // Room 없으면 기존 Firebase SSE 유지
+        connectSSE('/banktotal/settle/manual',d=>{
+            if(isLocalEditRecent())return;
+            const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            const merged=[...settleManual];
+            const mergedIds=new Set(merged.map(m=>m._id));
+            remote.forEach(r=>{if(!mergedIds.has(r._id)){merged.push(r);mergedIds.add(r._id);}});
+            settleManual=merged;
+            lsCache('settle_manual',settleManual);
+            if(currentTab==='settle')renderSettle();
+        });
+        connectSSE('/banktotal/settle/auto',d=>{
+            settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            if(currentTab==='settle')renderSettle();
+        });
+        connectSSE('/banktotal/sfa_daily',d=>{
+            if(isLocalEditRecent())return;
+            const hasLocal=lsLoad('sfa_daily');
+            if(!hasLocal||_needsFirebaseSync){
+                sfaDaily=d||{};
+                lsCache('sfa_daily',sfaDaily);
+            }else{
+                const remote=d||{};
+                Object.keys(remote).forEach(k=>{if(!sfaDaily[k])sfaDaily[k]=remote[k];});
+                lsCache('sfa_daily',sfaDaily);
+            }
+            if(currentTab==='settle')renderSettle();
+        });
+    }
+    fetch(FB+'/banktotal/ai_rules.json').then(r=>r.json()).then(d=>{if(d)aiRules=d}).catch(()=>{});
 }
 
 // --- NativeBridge 지원 (앱 내 WebView) ---
@@ -172,9 +366,35 @@ function loadFromNative(){
         const json=NativeBridge.getAccountsJson();
         if(json){
             const list=JSON.parse(json);
+            if(list&&list.length){
+                accounts={};
+                list.forEach(a=>{
+                    const key=a.accountNumber||a.bankName||('acct_'+list.indexOf(a));
+                    accounts[key]={
+                        bank:a.bankName||'',
+                        account:a.displayName||a.accountNumber||'',
+                        balance:a.balance||0,
+                        bankName:a.bankName||'',
+                        accountNumber:a.accountNumber||'',
+                        updated:a.lastUpdated||0
+                    };
+                });
+                lsCache('accounts',accounts);
+            }
             renderNativeAccounts(list);
         }
     }catch(e){}
+    // Room DB에서 settle/sfa 최신 데이터 갱신
+    try{
+        if(NativeBridge.hasRoomData()){
+            const si=NativeBridge.getSettleItemsJson();
+            if(si){settleManual=JSON.parse(si);}
+            const sf=NativeBridge.getSfaDailyJson();
+            if(sf){sfaDaily=JSON.parse(sf);}
+            if(currentTab==='settle')renderSettle();
+        }
+    }catch(e){}
+    autoSyncSfaDaily();
     return true;
 }
 
@@ -183,10 +403,14 @@ function renderNativeAccounts(list){
     list.forEach(a=>{
         if(a.isActive){total+=a.balance;if(a.balance>=0)subtotal+=a.balance;}
     });
-    document.getElementById('totalVal').textContent=fmt(total);
+    const tvEl=document.getElementById('totalVal');
+    tvEl.textContent=fmt(total);
+    tvEl.style.color=total>0?'#4fc3f7':total<0?'#ef5350':'#e0e0e0';
     if(subtotal!==total){
         document.getElementById('subtotalRow').classList.add('show');
-        document.getElementById('subtotalVal').textContent=fmt(subtotal);
+        const svEl=document.getElementById('subtotalVal');
+        svEl.textContent=fmt(subtotal);
+        svEl.style.color=subtotal>0?'#4fc3f7':subtotal<0?'#ef5350':'#e0e0e0';
     }else{
         document.getElementById('subtotalRow').classList.remove('show');
     }
@@ -217,9 +441,19 @@ function renderAccounts(){
         document.getElementById('totalVal').textContent='0';
         return;
     }
-    let total=0;
-    list.forEach(a=>total+=a.balance||0);
-    document.getElementById('totalVal').textContent=fmt(total);
+    let total=0,subtotal=0;
+    list.forEach(a=>{total+=a.balance||0;if((a.balance||0)>=0)subtotal+=a.balance||0;});
+    const tvEl2=document.getElementById('totalVal');
+    tvEl2.textContent=fmt(total);
+    tvEl2.style.color=total>0?'#4fc3f7':total<0?'#ef5350':'#e0e0e0';
+    if(subtotal!==total){
+        document.getElementById('subtotalRow').classList.add('show');
+        const svEl=document.getElementById('subtotalVal');
+        svEl.textContent=fmt(subtotal);
+        svEl.style.color=subtotal>0?'#4fc3f7':subtotal<0?'#ef5350':'#e0e0e0';
+    }else{
+        document.getElementById('subtotalRow').classList.remove('show');
+    }
 
     const lastUp=Math.max(...list.map(a=>a.updated||0));
     document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
@@ -252,15 +486,15 @@ function renderLedger(){
     if(ledgerMode==='out')filtered=transactions.filter(t=>t.type==='출금');
 
     if(ledgerMode==='cat'){
-        renderCategory(transactions.filter(t=>t.type==='출금'));
+        renderCategory(transactions.filter(t=>t.type==='출금'&&!t._excluded));
         return;
     }
 
-    // 요약
-    const totalIn=transactions.filter(t=>t.type==='입금').reduce((s,t)=>s+(t.amount||0),0);
-    const totalOut=transactions.filter(t=>t.type==='출금').reduce((s,t)=>s+(t.amount||0),0);
+    // 요약 (제외 항목 합산 안 함)
+    const totalIn=transactions.filter(t=>t.type==='입금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
+    const totalOut=transactions.filter(t=>t.type==='출금'&&!t._excluded).reduce((s,t)=>s+(t.amount||0),0);
     sum.innerHTML=`<div class="summary-row">
-        <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4caf50">+${fmt(totalIn)}</div></div>
+        <div class="summary-box"><div class="summary-label">입금</div><div class="summary-val" style="color:#4fc3f7">+${fmt(totalIn)}</div></div>
         <div class="summary-box"><div class="summary-label">출금</div><div class="summary-val" style="color:#ef5350">-${fmt(totalOut)}</div></div>
     </div>`;
 
@@ -274,13 +508,15 @@ function renderLedger(){
 
     let html='';
     for(const[date,txs]of Object.entries(grouped)){
-        const dayTotal=txs.reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
-        html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>=0?'#4caf50':'#ef5350'}">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span></div>`;
+        const dayTotal=txs.filter(t=>!t._excluded).reduce((s,t)=>s+(t.type==='입금'?t.amount:-t.amount),0);
+        html+=`<div class="tx-group"><div class="tx-date">${date}  <span style="color:${dayTotal>0?'#4fc3f7':dayTotal<0?'#ef5350':'#e0e0e0'}">${dayTotal>0?'+':''}${fmt(dayTotal)}</span></div>`;
         txs.forEach(t=>{
             const isIn=t.type==='입금';
-            html+=`<div class="tx-item">
-                <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
-                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance">잔액 ${fmt(t.balance)}</div></div>
+            const excCls=t._excluded?'excluded':'';
+            const tag=t._reason?`<span class="tx-excluded-tag">${t._reason}</span>`:'';
+            html+=`<div class="tx-item ${excCls}">
+                <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}${tag}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance" style="color:${(t.balance||0)>0?'#4fc3f7':(t.balance||0)<0?'#ef5350':'#e0e0e0'}">잔액 ${fmt(t.balance)}</div></div>
             </div>`;
         });
         html+='</div>';
@@ -360,17 +596,1241 @@ function renderPermissions(){
     }
 }
 
+// --- 정산 렌더링 ---
+// 정산 시뮬레이션 — 개별 항목 상태 (_key → {ex, sh})
+// Room DB 있으면 NativeBridge에서 로드, 없으면 localStorage
+let itemState={};
+const _hasNB=typeof NativeBridge!=='undefined';
+function _loadItemState(){
+    try{
+        if(_hasNB&&NativeBridge.hasRoomData&&NativeBridge.hasRoomData()){
+            const s=NativeBridge.getItemStatesJson();
+            if(s&&s!=='{}')itemState=JSON.parse(s);
+            else{const ls=localStorage.getItem('settleItemState');if(ls)itemState=JSON.parse(ls);}
+        }else{
+            const ls=localStorage.getItem('settleItemState');if(ls)itemState=JSON.parse(ls);
+        }
+    }catch(e){}
+}
+_loadItemState();
+function saveItemState(){
+    try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}
+    // Room DB에도 동기화
+    if(_hasNB&&NativeBridge.saveItemStateNative){
+        Object.entries(itemState).forEach(([k,v])=>{
+            try{NativeBridge.saveItemStateNative(JSON.stringify({key:k,ex:!!v.ex,sh:v.sh||0,st:v.st||'',_ov:!!v._ov}))}catch(e){}
+        });
+    }
+}
+function btLog(tag,msg){
+    const ts=Date.now(),time=new Date().toLocaleString('ko-KR',{hour12:false});
+    fetch(FB+'/banktotal/logs/web_'+ts+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tag,msg,time,ts})}).catch(()=>{});
+}
+function ist(k){if(!itemState[k])itemState[k]={ex:false,sh:0,st:''};return itemState[k]}
+function setItemStatus(k,st){const s=ist(k);s.st=(s.st===st)?'':st;saveItemState();renderSettle()}
+function excludeDay(key){
+    const s=ist(key);s.hid=true;s.ex=true;s._ov=true;
+    btLog('[DEL-DAY]',`${key} 당일 삭제(숨김)`);
+    saveItemState();renderSettle();
+}
+function deleteSettleItem(id){
+    if(!confirm('이 항목을 완전 삭제하시겠습니까? (모든 날짜에서 사라집니다)'))return;
+    const mi=settleManual.findIndex(m=>m._id===id);
+    if(mi>=0){
+        const item=settleManual[mi];
+        btLog('[DEL]',`${item.name} ${item.amount}원 ${item.type} ${item.cycle} 삭제`);
+        fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'});
+        settleManual.splice(mi,1);
+        lsCache('settle_manual',settleManual);
+        markLocalEdit();
+    }else{
+        const ai=settleAuto.findIndex(a=>a._id===id);
+        if(ai>=0){
+            btLog('[DEL]',`${settleAuto[ai].name} auto 삭제`);
+            fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'});
+            settleAuto.splice(ai,1);
+            lsCache('settle_auto',settleAuto);
+        }
+    }
+    // Room DB에서도 삭제
+    if(_hasNB&&NativeBridge.deleteSettleItemNative)try{NativeBridge.deleteSettleItemNative(id)}catch(e){}
+    renderSettle();
+}
+var _togLock=0;
+function toggleItem(k){
+    if(Date.now()-_togLock<300)return; // 더블 실행 방지 (touchend+click 동시 발화)
+    _togLock=Date.now();
+    const s=ist(k);s.ex=!s.ex;
+    s._ov=true; // 수동 override — 자동제외 덮어쓰기 방지
+    btLog('[TOGGLE]',`${k} → ${s.ex?'제외':'포함'}`);
+    saveItemState();renderSettle();
+}
+
+// 스와이프 드래그 — 좌우=날짜이동, 탭=포함/제외
+let swSt=null;
+function swStart(e,key){swSt={key,sx:e.touches[0].clientX,sy:e.touches[0].clientY,el:e.currentTarget,sw:false,t0:Date.now(),moved:false}}
+document.addEventListener('touchmove',function(e){
+    if(!swSt)return;
+    const dx=e.touches[0].clientX-swSt.sx;
+    const dy=e.touches[0].clientY-swSt.sy;
+    swSt.dx=dx;swSt.dy=dy;
+    if(Math.abs(dx)>8||Math.abs(dy)>8)swSt.moved=true;
+    if(!swSt.sw&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>20){swSt.sw=true}
+    if(swSt.sw){
+        e.preventDefault();
+        swSt.el.style.transform=`translateX(${dx}px)`;
+        swSt.el.style.opacity=Math.max(0.3,1-Math.abs(dx)/200);
+    }
+},{passive:false});
+document.addEventListener('touchend',function(e){
+    if(!swSt)return;
+    const _sw=swSt;swSt=null; // 먼저 null로 — onclick 중복 방지
+    _sw.el.style.transform='';_sw.el.style.opacity='';_sw.el.style.transition='transform .2s,opacity .2s';
+    setTimeout(()=>{if(_sw.el)_sw.el.style.transition=''},200);
+    const dt=Date.now()-_sw.t0;
+    if(_sw.sw){
+        const dx=_sw.dx||0;
+        const days=dx>30?1:dx<-30?-1:0;
+        if(days!==0){ist(_sw.key).sh+=days;saveItemState();renderSettle()}
+    }else if(!_sw.moved&&dt<300){
+        toggleItem(_sw.key);
+    }
+})
+
+function renderSettle(){
+    const sum=document.getElementById('settleSummary');
+    const el=document.getElementById('settleContent');
+    const currentBalance=Object.values(accounts).reduce((s,a)=>s+((a.balance||0)>=0?(a.balance||0):0),0);
+    const now=new Date();now.setHours(0,0,0,0);
+    const dayNames=['일','월','화','수','목','금','토'];
+
+    const items=generateAllItems(settleManual,settleAuto,30).filter(u=>!ist(u._key).hid);
+    // SFA: 당일 BLOCK 금액 그대로 사용 (차감/보정 없음)
+    items.forEach(u=>{
+        if(u.name==='물류'||u.name==='SFA'){
+            const ymd=new Date(u.date);
+            const dailyKey=ymd.getFullYear()+'-'+(ymd.getMonth()+1).toString().padStart(2,'0')+'-'+ymd.getDate().toString().padStart(2,'0');
+            if(sfaDaily[dailyKey]&&sfaDaily[dailyKey].amount!=null){
+                u.name='SFA';
+                u.amount=sfaDaily[dailyKey].amount;
+                u.isBlock=true;
+                u._sfaKey=dailyKey;
+            }
+        }
+    });
+    const included=items.filter(u=>!u.excluded);
+    const todayIncluded=included.filter(u=>dateFmt(u.date)===dateFmt(now.getTime()));
+    const todayIn=todayIncluded.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
+    const todayOut=todayIncluded.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
+    const todayPredicted=currentBalance+todayIn-todayOut;
+    const expectedIn=included.filter(u=>u.type==='입금').reduce((s,u)=>s+u.amount,0);
+    const expectedOut=included.filter(u=>u.type==='출금').reduce((s,u)=>s+u.amount,0);
+    const predicted=currentBalance+expectedIn-expectedOut;
+    const exCnt=items.filter(u=>u.excluded).length;
+
+    // confirmed 당일 출금 → 자동 제외 (이미 출금되어 잔고에 반영됨, 이중 차감 방지)
+    // 단, 사용자가 수동 토글(_ov)한 항목은 자동제외 무시
+    items.forEach(u=>{
+        if(ist(u._key)._ov)return; // 수동 override 있으면 자동제외 안 함
+        if(ist(u._key).st==='confirmed'&&u.type==='출금'&&!u.excluded){
+            u.excluded=true;u._autoExclude='출금확인';
+        }
+    });
+    // 날짜 지난 항목 처리: 출금만 이월, 입금은 자동 제외 (잔고에 이미 반영)
+    const todayTs=now.getTime();
+    items.forEach(u=>{
+        if(ist(u._key)._ov)return; // 수동 override 있으면 자동제외 안 함
+        if(u.date<todayTs&&!u.excluded){
+            if(u.type==='입금'){u.excluded=true;u._autoExclude='이월삭제';}
+            else u.date=todayTs; // 출금만 오늘로 이월
+        }
+    });
+    // 중복 제거: 같은 날짜+같은 이름+같은 타입 → 최초 1건만 유지
+    const seenByDateName={};
+    for(let i=items.length-1;i>=0;i--){
+        const u=items[i];
+        const dk=dateFmt(u.date)+'_'+u.name+'_'+u.type;
+        if(seenByDateName[dk]){items.splice(i,1);}
+        else seenByDateName[dk]=true;
+    }
+    // 날짜별 그룹 + 활성 상단, 제외 하단 정렬
+    const upByDate={};
+    items.forEach(u=>{const d=dateFmt(u.date);if(!upByDate[d])upByDate[d]=[];upByDate[d].push(u)});
+    Object.values(upByDate).forEach(arr=>arr.sort((a,b)=>{
+        if(a.excluded!==b.excluded)return a.excluded?1:-1;
+        if(a.type!==b.type)return a.type==='입금'?-1:1;
+        return 0;
+    }));
+
+    // === sticky 영역: 요약 + 보정배너 + 컬럼헤더 + 현재잔고 ===
+    let sh='';
+    sh+=`<div class="summary-row">
+        <div class="summary-box"><div class="summary-label">오늘 예상</div><div class="summary-val" style="font-size:18px;color:${todayPredicted>0?'#4fc3f7':todayPredicted<0?'#ef5350':'#e0e0e0'}">${fmt(todayPredicted)}</div></div>
+        <div class="summary-box"><div class="summary-label">30일 예상</div><div class="summary-val" style="font-size:14px;color:${predicted>0?'#4fc3f7':predicted<0?'#ef5350':'#e0e0e0'}">${fmt(predicted)}</div></div>
+    </div>${exCnt?`<div style="text-align:center;font-size:11px;color:#ff9800;margin-top:4px">${exCnt}건 제외중</div>`:''}`;
+    const _pq=getPendingQueue();
+    if(_pq.length){
+        sh+=`<div style="background:#ff980015;border:1px solid #ff980044;border-radius:8px;padding:8px;margin:4px 0">
+            <div style="font-size:11px;color:#ff9800;font-weight:bold;margin-bottom:6px">보정 대기 ${_pq.length}건</div>
+            ${_pq.map((p,i)=>`<div style="display:flex;align-items:center;padding:5px 0;border-top:1px solid #ff980022;gap:6px">
+                <span style="flex:1;font-size:12px;color:#ddd">${p.desc}</span>
+                <button onclick="applyPending(${i})" style="padding:4px 10px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:12px;min-width:36px">예</button>
+                <button onclick="dismissPending(${i})" style="padding:4px 10px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;min-width:48px">아니오</button>
+            </div>`).join('')}
+        </div>`;
+    }
+    sh+=`<div style="display:flex;align-items:center;padding:4px;border-bottom:1px solid #333">
+        <span style="min-width:40px;font-size:10px;color:#666">상태</span>
+        <span style="flex:1;font-size:10px;color:#666">내역 <span style="color:#444">탭=제외 · 드래그=이동</span></span>
+        <span style="min-width:55px;text-align:right;font-size:10px;color:#666">금액</span>
+        <span style="min-width:60px;text-align:right;font-size:10px;color:#666">잔고</span>
+        <span style="min-width:18px"></span>
+    </div>`;
+    sh+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;background:#4fc3f711">
+        <span style="min-width:40px;font-size:12px;color:#4fc3f7">현재</span>
+        <span style="flex:1;font-size:12px;color:#aaa">소계</span>
+        <span style="min-width:55px"></span>
+        <span style="min-width:60px;text-align:right;font-size:14px;font-weight:bold;color:#4fc3f7">${fmt(currentBalance)}</span>
+        <span style="min-width:18px"></span>
+    </div>`;
+    sum.innerHTML=sh;
+
+    // === 스크롤 영역: 계좌 + 30일 항목 ===
+    let html='';
+    const acctList=Object.values(accounts).filter(a=>a.balance!==undefined&&!((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/)).sort((a,b)=>(b.balance||0)-(a.balance||0));
+    acctList.forEach(a=>{
+        const bn=a.bankName||a.bank||'';
+        const bal_=a.balance||0;
+        const c=bal_>0?'#4fc3f7':bal_<0?'#ef5350':'#e0e0e0';
+        html+=`<div style="display:flex;align-items:center;padding:3px 4px 3px 20px;border-bottom:1px solid #111">
+            <span style="min-width:40px;font-size:10px;color:#555"></span>
+            <span style="flex:1;font-size:11px;color:#666">${bn} ${a.account||a.accountNumber||''}</span>
+            <span style="min-width:55px"></span>
+            <span style="min-width:60px;text-align:right;font-size:11px;color:${c}">${fmt(bal_)}</span>
+            <span style="min-width:18px"></span>
+        </div>`;
+    });
+
+    let bal=currentBalance;
+    for(let i=0;i<30;i++){
+        const d=new Date(now.getTime()+i*86400000);
+        const dk=dateFmt(d.getTime());
+        const dayName=dayNames[d.getDay()];
+        const dayItems=upByDate[dk]||[];
+        const isToday=i===0;
+        const dayColor=d.getDay()===0?'#ef5350':d.getDay()===6?'#4fc3f7':'#888';
+        if(dayItems.length){
+            // 날짜 헤더
+            const hdrBg=isToday?'#4fc3f722':'#ffffff08';
+            html+=`<div style="padding:6px 4px 2px;background:${hdrBg};border-top:1px solid #333;margin-top:2px">
+                <span style="font-size:12px;font-weight:bold;color:${dayColor}">${d.getMonth()+1}/${d.getDate()}(${dayName})${isToday?' 오늘':''}</span>
+            </div>`;
+            dayItems.forEach((u,j)=>{
+                const isIn=u.type==='입금';
+                const delta=isIn?u.amount:-u.amount;
+                if(!u.excluded)bal+=delta;
+                const op=u.excluded?'opacity:.35;':'';
+                const iSt=ist(u._key).st||'';
+                const stBg=iSt==='confirmed'?'background:#4fc3f718;':iSt==='pending'?'background:#ff980018;':'';
+                const bg=u.excluded?'':stBg||(u.isBlock?'background:#e91e6311;':u.isPending?'background:#ff980011;':isToday?'background:#4fc3f711;':'');
+                const amtC=isIn?'#4fc3f7':'#ef5350';
+                const nmC=u.isBlock?'#e91e63':u.isPending?'#ff9800':u.overdue?'#ff9800':'#aaa';
+                const tag=u.isPending?' ⚡':u._autoExclude?' ('+u._autoExclude+')':'';
+                const stIcon=iSt==='confirmed'?'<span style="color:#4caf50;font-size:10px;margin-right:2px">●</span>':iSt==='pending'?'<span style="color:#ff9800;font-size:10px;margin-right:2px">●</span>':'';
+                const stk=u.excluded?'text-decoration:line-through;':'';
+                const cfBg=iSt==='confirmed'?'background:#4caf50;color:#fff;':'background:#333;color:#888;';
+                const pdBg=iSt==='pending'?'background:#ff9800;color:#fff;':'background:#333;color:#888;';
+                html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}">
+                    <span style="min-width:40px;display:flex;gap:2px">
+                        <span onclick="setItemStatus('${u._key}','confirmed')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${cfBg}">확</span>
+                        <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
+                    </span>
+                    <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
+                    <span onclick="settleItemMenu('${u._key}','${u._id}',${u.amount},${!!u._sfaKey},'${u._sfaKey||''}','${u.cycle||'none'}')" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;touch-action:manipulation;margin-right:6px;padding:6px 2px">${isIn?'+':'-'}${fmt(u.amount)}</span>
+                    <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
+                </div>`;
+            });
+        }else{
+            const bg=isToday?'background:#4fc3f711;':'';
+            html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}">
+                <span style="min-width:40px;font-size:11px;color:${dayColor}">${dk.slice(5)}</span>
+                <span style="flex:1;font-size:11px;color:${dayColor}">(${dayName})</span>
+                <span style="min-width:55px"></span>
+                <span style="min-width:60px;text-align:right;font-size:13px;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
+                <span style="min-width:18px"></span>
+            </div>`;
+        }
+    }
+    el.innerHTML=html;
+}
+
+function autoSyncSfaDaily(){
+    // BLOCK 계좌 잔고 → 당일 sfaDaily 자동 동기화 (계좌 데이터 갱신 시 호출)
+    const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
+    if(!blockAcct||blockAcct.balance===undefined)return;
+    const amt=Math.abs(blockAcct.balance);
+    if(amt===0)return; // 0값은 보정 대상 아님
+    const now=new Date();
+    const key=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0')+'-'+now.getDate().toString().padStart(2,'0');
+    // 이미 같은 금액이면 스킵
+    if(sfaDaily[key]&&sfaDaily[key].amount===amt)return;
+    sfaDaily[key]={amount:amt,ts:Date.now()};
+    lsCache('sfa_daily',sfaDaily);
+    try{if(_hasNB)NativeBridge.saveSfaDailyNative(key,amt)}catch(e){}
+    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
+    if(currentTab==='settle')renderSettle();
+}
+function editSfaDaily(key,cur){
+    // BBQ BLOCK 계좌에서 자동 동기화
+    const blockAcct=Object.values(accounts).find(a=>((a.bankName||a.bank||'')+(a.account||a.accountNumber||'')).toUpperCase().match(/BBQ|BLOCK|SFA/));
+    if(!blockAcct||blockAcct.balance===undefined){alert('BBQ BLOCK 계좌 데이터 없음');return;}
+    const amt=Math.abs(blockAcct.balance);
+    markLocalEdit();
+    sfaDaily[key]={amount:amt,ts:Date.now()};
+    lsCache('sfa_daily',sfaDaily);
+    try{if(_hasNB)NativeBridge.saveSfaDailyNative(key,amt)}catch(e){}
+    fetch(FB+'/banktotal/sfa_daily/'+key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,ts:Date.now()})});
+    renderSettle();
+    // 동기화 피드백
+    const fb=document.createElement('div');
+    fb.textContent='SFA 동기화: '+fmt(amt);
+    fb.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#4fc3f7;color:#121212;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:999;';
+    document.body.appendChild(fb);
+    setTimeout(()=>fb.remove(),2000);
+}
+function settleItemMenu(key,id,amt,isSfa,sfaKey,cycle){
+    // 네이티브 BottomSheet 사용 (WebView 터치 문제 근본 해결)
+    if(_hasNB&&NativeBridge.showItemMenu){
+        try{NativeBridge.showItemMenu(key,id,amt,!!isSfa,sfaKey||'',cycle||'none');return}catch(e){}
+    }
+    // fallback: 웹 다이얼로그
+    const old=document.getElementById('settleMenu');if(old)old.remove();
+    const s=ist(key);
+    const exTxt=s.ex?'포함':'제외';
+    const exClr=s.ex?'#4fc3f7':'#ef5350';
+    const isRecur=cycle!=='none'&&cycle!=='once';
+    const delLabel=isRecur?'오늘삭제':'삭제';
+    const delAction=isRecur?`excludeDay('${key}')`:`deleteSettleItem('${id}')`;
+    const d=document.createElement('div');d.id='settleMenu';
+    d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center';
+    d.innerHTML=`<div style="background:#222;border-radius:12px;padding:20px;min-width:200px;text-align:center">
+        <div style="color:#aaa;font-size:13px;margin-bottom:16px">${fmt(amt)}원</div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            <button onclick="document.getElementById('settleMenu').remove();toggleItem('${key}')" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:${exClr};color:#fff;touch-action:manipulation">${exTxt}</button>
+            <button onclick="document.getElementById('settleMenu').remove();${delAction}" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#e74c3c;color:#fff;touch-action:manipulation">${delLabel}</button>
+            <button onclick="document.getElementById('settleMenu').remove();${isSfa?`editSfaDaily('${sfaKey}',${amt})`:`editSettleAmount('${id}',${amt})`}" style="padding:12px 20px;border:none;border-radius:8px;font-size:15px;background:#555;color:#fff;touch-action:manipulation">수정</button>
+        </div>
+        <div onclick="document.getElementById('settleMenu').remove()" style="margin-top:14px;color:#666;font-size:13px;padding:8px;touch-action:manipulation">닫기</div>
+    </div>`;
+    document.body.appendChild(d);
+    d.addEventListener('click',function(e){if(e.target===d)d.remove()});
+}
+function editSettleAmount(id,cur){
+    const v=prompt('금액 수정 (숫자만)',cur||'');
+    if(v===null)return;
+    markLocalEdit();
+    const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
+    // Firebase에서 manual/auto 구분해서 업데이트
+    const mIdx=settleManual.findIndex(m=>m._id===id);
+    if(mIdx>=0){
+        fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PATCH',body:JSON.stringify({amount:amt})});
+        settleManual[mIdx].amount=amt;
+        lsCache('settle_manual',settleManual);
+        // Room DB 동기화
+        try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(settleManual[mIdx]))}catch(e){}
+    }else{
+        const aIdx=settleAuto.findIndex(a=>a._id===id);
+        if(aIdx>=0){
+            fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'PATCH',body:JSON.stringify({amount:amt})});
+            settleAuto[aIdx].amount=amt;
+            try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(settleAuto[aIdx]))}catch(e){}
+        }
+    }
+    renderSettle();
+}
+
+// --- 정산 자동확인: 출금 발생 시 당일 정산 항목 자동매칭 ---
+function settleNameMatch(cp,name){
+    const a=(cp||'').toLowerCase(),b=(name||'').toLowerCase();
+    if(a.length<2||b.length<2)return false;
+    if(a.includes(b)||b.includes(a))return true;
+    let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;
+    return i>=(/[a-z]/.test(a[0])?3:2);
+}
+function autoConfirmSettle(newOutTxs){
+    if(!newOutTxs.length||!settleManual.length)return;
+    const todayDate=new Date().getDate();
+    let changed=false;
+    newOutTxs.forEach(tx=>{
+        const cp=(tx.counterparty||'');
+        if(cp.length<2)return;
+        settleManual.filter(m=>m.cycle==='monthly'&&m.dayOfMonth===todayDate).forEach(m=>{
+            if(!settleNameMatch(cp,m.name))return;
+            const key=m._id+'_0';
+            const s=ist(key);
+            if(s.st==='confirmed')return;
+            s.st='confirmed';
+            changed=true;
+            btLog('[CONFIRM]',`자동확인: ${cp}→${m.name} ${tx.amount}원`);
+            saveMatchLog(cp,m.name,tx.amount,m.amount,true);
+        });
+    });
+    if(changed){saveItemState();if(currentTab==='settle')renderSettle();}
+}
+// 매칭 판단 기록 (localStorage에 누적 → 가이드 자동 강화)
+function saveMatchLog(cp,name,txAmt,settleAmt,auto){
+    try{
+        const logs=JSON.parse(localStorage.getItem('bt_match_log')||'[]');
+        logs.push({cp,name,txAmt,settleAmt,auto,ts:Date.now()});
+        if(logs.length>200)logs.splice(0,logs.length-200);
+        localStorage.setItem('bt_match_log',JSON.stringify(logs));
+    }catch(e){}
+}
+// --- 보정 대기 큐 (예/아니오) ---
+function getPendingQueue(){try{return JSON.parse(localStorage.getItem('bt_pending_q')||'[]')}catch(e){return[]}}
+function savePendingQueue(q){localStorage.setItem('bt_pending_q',JSON.stringify(q))}
+function applyPending(idx){
+    const q=getPendingQueue();const p=q[idx];if(!p)return;
+    fetch(FB+'/banktotal/settle/manual/'+p.id+'.json',{method:'PATCH',body:JSON.stringify(p.patch)});
+    const item=settleManual.find(m=>m._id===p.id);
+    if(item){Object.assign(item,p.patch);try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(item))}catch(e){}}
+    btLog('[APPLY]',`보정 승인: ${p.name} ${p.desc}`);
+    saveMatchLog(p.cp||'',p.name,p.txAmt||0,p.patch.amount||0,false);
+    q.splice(idx,1);savePendingQueue(q);renderSettle();
+}
+function dismissPending(idx){
+    const q=getPendingQueue();const p=q[idx];
+    if(p){
+        btLog('[DISMISS]',`보정 거부: ${p.name} ${p.desc}`);
+        saveMatchLog(p.cp||'',p.name,0,0,false);
+    }
+    q.splice(idx,1);savePendingQueue(q);renderSettle();
+}
+
+// --- AI 금액 보정: 새 출금 발생 시 고정비 매칭 판단 ---
+let _correctCooldown=0;
+function checkSettleCorrection(newOutTxs){
+    // 쿨다운 5분
+    if(Date.now()-_correctCooldown<300000)return;
+    // 0원 항목 또는 금액 차이 큰 항목 대상
+    const candidates=settleManual.filter(m=>m.cycle==='monthly');
+    if(!candidates.length)return;
+    const key=loadAiKey();
+    if(!key)return;
+    _correctCooldown=Date.now();
+
+    const txList=newOutTxs.map(t=>(t.counterparty||t.bank||'')+' '+t.amount+'원').join('\n');
+    const settleList=candidates.map(c=>c.name+' (매월'+c.dayOfMonth+'일, 현재:'+c.amount+'원)').join('\n');
+
+    const prompt=`새로 발생한 출금 거래와 월 고정비 항목을 비교하세요.
+
+[새 출금 거래]
+${txList}
+
+[월 고정비 목록]
+${settleList}
+
+[핵심 규칙 — 반드시 준수]
+1. 매칭은 거래상대 이름과 항목명이 관련 있을 때만 (예: 미소금융→미소, KT→kt인터넷)
+2. 이름이 무관한 항목에 매칭 절대 금지 (예: 미소금융을 skylife에 매칭하면 안 됨)
+3. 금액만 비슷하고 이름이 다르면 매칭 금지
+4. 모든 매칭은 confidence="low" (사용자에게 제안만, 자동 적용 없음)
+5. 날짜: 공휴일/주말/미납 밀림은 변경하지 마세요
+6. 날짜: "납부기한", "결제일" 등 확정일이 원문에 있을 때만 dayOfMonth 변경
+7. 매칭 불가하면 빈 배열 []
+8. 0원 항목의 amount를 0으로 설정하는 보정은 절대 금지
+
+응답 형식 (순수 JSON만, 설명 없이):
+[{"name":"항목명","amount":보정금액,"confidence":"high또는low","reason":"매칭근거","dayOfMonth":확정일(선택)}]`;
+
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    }).then(r=>r.json()).then(d=>{
+        const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+        const clean=txt.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+        try{
+            const matches=JSON.parse(clean);
+            if(!Array.isArray(matches)||!matches.length)return;
+            let autoApplied=0;
+            const autoChanges=[];
+            const suggestions=[];
+            matches.forEach(m=>{
+                const item=candidates.find(c=>c.name===m.name);
+                if(!item)return;
+                const isHigh=m.confidence==='high';
+                const patch={};
+                let desc=item.name+':';
+                if(m.amount&&m.amount>0&&item.amount!==m.amount){
+                    patch.amount=m.amount;
+                    desc+=' '+(item.amount?fmt(item.amount):'0')+'→'+fmt(m.amount)+'원';
+                }
+                if(m.dayOfMonth&&m.dayOfMonth!==item.dayOfMonth){
+                    patch.dayOfMonth=m.dayOfMonth;
+                    desc+=' 날짜'+item.dayOfMonth+'→'+m.dayOfMonth+'일';
+                }
+                if(!Object.keys(patch).length)return;
+                // 모든 보정은 사용자 확인 필요 (자동 적용 금지)
+                suggestions.push({item,patch,desc:desc+(m.reason?' ('+m.reason+')':'')});
+            });
+            // 보정 제안 → 대기 큐에 저장 (정산 상단에 예/아니오 표시)
+            if(suggestions.length){
+                const q=getPendingQueue();
+                suggestions.forEach(s=>{
+                    // 중복 방지
+                    if(q.some(p=>p.id===s.item._id&&JSON.stringify(p.patch)===JSON.stringify(s.patch)))return;
+                    q.push({id:s.item._id,name:s.item.name,patch:s.patch,desc:s.desc,
+                        cp:newOutTxs[0]?.counterparty||'',txAmt:newOutTxs[0]?.amount||0,ts:Date.now()});
+                });
+                if(q.length>20)q.splice(0,q.length-20);
+                savePendingQueue(q);
+                if(currentTab==='settle')renderSettle();
+            }
+        }catch(e){}
+    }).catch(()=>{});
+}
+
+function generateAllItems(manual,auto,days){
+    const result=[];
+    const now=new Date();now.setHours(0,0,0,0);
+    const end=new Date(now.getTime()+days*86400000);
+    manual.forEach(m=>{
+        if(m.cycle==='none'){
+            const key=m._id;
+            const st=ist(key);
+            const day=Math.max(0,Math.min(29,st.sh));
+            const d=new Date(now.getTime()+day*86400000);
+            result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,cycle:m.cycle,isPending:true,excluded:st.ex});
+            return;
+        }
+        // 과거 1일만 탐색 (어제 미처리 이월용, 그 이전은 잔고에 이미 반영)
+        const lookBack=(m.cycle==='weekly'||m.cycle==='monthly')?1:0;
+        for(let i=-lookBack;i<days;i++){
+            const d=new Date(now.getTime()+i*86400000);
+            let match=false;
+            if(m.cycle==='once'&&m.date){
+                const od=new Date(m.date+'T00:00:00+09:00');
+                if(d.getFullYear()===od.getFullYear()&&d.getMonth()===od.getMonth()&&d.getDate()===od.getDate())match=true;
+            }
+            if(m.cycle==='daily')match=true;
+            if(m.cycle==='monthly'&&d.getDate()===(m.dayOfMonth||1))match=true;
+            if(m.cycle==='weekly'){
+                if(d.getDay()===(m.dayOfWeek||0))match=true;
+            }
+            if(match){
+                // 날짜 기반 키 — 오프셋이 아닌 날짜 고정이라 다음날에도 제외 상태 유지
+                const dateKey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+                const key=m._id+'_'+dateKey;
+                const st=ist(key);
+                const adjDay=Math.max(0,Math.min(29,i+st.sh));
+                const nd=new Date(now.getTime()+adjDay*86400000);
+                result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,cycle:m.cycle,excluded:st.ex});
+            }
+        }
+    });
+    auto.forEach(a=>{
+        if(a.cycle==='none'){
+            const key=a._id;
+            const st=ist(key);
+            const day=Math.max(0,Math.min(29,st.sh));
+            const d=new Date(now.getTime()+day*86400000);
+            result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),_key:key,_id:a._id,cycle:'none',isPending:true,excluded:st.ex});
+            return;
+        }
+        if(!a.dueDate&&!a.amount)return;
+        const due=a.dueDate||now.getTime();
+        const tp=a.type||'출금';
+        const showDate=(tp==='출금'&&due<now.getTime())?now.getTime():due;
+        if(showDate<=end.getTime()){
+            const origDay=Math.round((showDate-now.getTime())/86400000);
+            const key=a._id;
+            const st=ist(key);
+            const newDay=Math.max(0,Math.min(29,origDay+st.sh));
+            const nd=new Date(now.getTime()+newDay*86400000);
+            result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:nd.getTime(),_key:key,_id:a._id,cycle:a.cycle||'none',overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
+        }
+    });
+    return result.sort((a,b)=>a.date-b.date);
+}
+
+function deleteSettle(id){
+    if(!confirm('삭제하시겠습니까?'))return;
+    fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+    try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
+}
+
+function deleteAutoSettle(id){
+    if(!confirm('삭제하시겠습니까?'))return;
+    fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
+    try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
+}
+
+// --- AI 재무상담 (Gemini API) ---
+let aiMessages=[];
+
+function promptAiKey(){
+    const cur=loadAiKey();
+    const val=prompt('Gemini API Key'+(cur?' (현재 설정됨)':''),cur||'');
+    if(val!==null&&val.trim()){
+        localStorage.setItem('gemini_api_key',val.trim());
+        if(typeof NativeBridge!=='undefined')try{NativeBridge.setGeminiKey(val.trim())}catch(e){}
+        document.getElementById('aiKeyBtn').style.color='#4caf50';
+    }
+}
+
+function loadAiKey(){
+    // 네이티브 키 우선 → localStorage → Firebase 순
+    let k=localStorage.getItem('gemini_api_key')||'';
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            const nk=NativeBridge.getGeminiKey();
+            if(nk){k=nk;localStorage.setItem('gemini_api_key',k)}
+            else if(k){NativeBridge.setGeminiKey(k)}
+        }catch(e){}
+    }
+    if(!k){
+        // Firebase에서 로드 (비동기, 다음 호출부터 사용)
+        fetch(FB+'/banktotal/settings/gemini_key.json').then(r=>r.json()).then(d=>{
+            if(d&&typeof d==='string'){
+                localStorage.setItem('gemini_api_key',d);
+                if(typeof NativeBridge!=='undefined')try{NativeBridge.setGeminiKey(d)}catch(e){}
+                const st=document.getElementById('aiKeyStatus');
+                if(st){st.textContent='설정됨';st.style.color='#4caf50'}
+            }
+        }).catch(()=>{});
+    }
+    return k;
+}
+
+function buildFinCtx(){
+    const accs=Object.values(accounts);
+    const totalBal=accs.reduce((s,a)=>s+(a.balance||0),0);
+    let c='';
+    // 외부 AI 컨텍스트 파일 로드 (/sdcard/Download/BankTotal_ai_context.txt)
+    try{
+        if(typeof NativeBridge!=='undefined'&&NativeBridge.readTextFile){
+            const extCtx=NativeBridge.readTextFile('/sdcard/Download/BankTotal_ai_context.txt');
+            if(extCtx)c+=extCtx+'\n\n';
+        }
+    }catch(e){}
+    if(aiRules.business){
+        c+=`[사업 정보] ${aiRules.business}\n`;
+        if(aiRules.income)c+='수입원: '+(Array.isArray(aiRules.income)?aiRules.income.join(', '):aiRules.income)+'\n';
+        if(aiRules.expenses)c+='지출: '+(Array.isArray(aiRules.expenses)?aiRules.expenses.join(', '):aiRules.expenses)+'\n';
+        if(aiRules.rules)c+='규칙: '+(Array.isArray(aiRules.rules)?aiRules.rules.join(' / '):aiRules.rules)+'\n\n';
+    }
+    c+=`[현재 재무]\n총 잔고: ${totalBal.toLocaleString()}원\n`;
+    accs.forEach(a=>{c+=`- ${a.bank||''} ${a.account||''}: ${(a.balance||0).toLocaleString()}원\n`});
+
+    const now=Date.now();
+    const recent=transactions.filter(t=>t.ts&&now-t.ts<30*86400000&&!t._excluded);
+    const tIn=recent.filter(t=>t.type==='입금').reduce((s,t)=>s+(t.amount||0),0);
+    const tOut=recent.filter(t=>t.type==='출금').reduce((s,t)=>s+(t.amount||0),0);
+    c+=`\n[최근 30일] 입금: ${tIn.toLocaleString()}원, 출금: ${tOut.toLocaleString()}원\n`;
+
+    const cats={};
+    recent.filter(t=>t.type==='출금').forEach(t=>{const n=t.counterparty||'미분류';cats[n]=(cats[n]||0)+(t.amount||0)});
+    if(Object.keys(cats).length){
+        c+='출금 카테고리:\n';
+        Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([n,a])=>{c+=`- ${n}: ${a.toLocaleString()}원\n`});
+    }
+
+    c+='\n최근 거래:\n';
+    recent.slice(0,20).forEach(t=>{
+        const d=new Date(t.ts);
+        c+=`- ${d.getMonth()+1}/${d.getDate()} ${t.type} ${(t.amount||0).toLocaleString()}원 ${t.counterparty||t.bank||''}\n`;
+    });
+
+    if(settleManual.length){
+        c+='\n[정기 항목]\n';
+        settleManual.forEach(m=>{
+            const cycleLabel=m.cycle==='none'?'밀린금액':m.cycle==='daily'?'매일':m.cycle==='weekly'?'매주':'매월';
+            c+=`- ${m.name}: ${m.type} ${(m.amount||0).toLocaleString()}원 (${cycleLabel})\n`;
+        });
+    }
+    if(settleAuto.length){
+        c+='\n[예정 고지서]\n';
+        settleAuto.forEach(a=>{c+=`- ${a.name||'고지서'}: ${(a.amount||0).toLocaleString()}원\n`});
+    }
+    return c;
+}
+
+// --- 로컬 파서: 단순 명령은 Gemini 없이 즉시 처리 ---
+// 음성인식 띄어쓰기 보정 사전 (흔한 음성입력 오류)
+const _voiceFixMap={'관 리비':'관리비','월 세':'월세','보 험료':'보험료','전 기세':'전기세','수 도세':'수도세',
+    '가 스비':'가스비','인 터넷':'인터넷','핸드 폰':'핸드폰','휴대 폰':'휴대폰','통 신비':'통신비',
+    '교 통비':'교통비','식 비':'식비','보 험':'보험','적 금':'적금','대 출':'대출','이 자':'이자',
+    '카 드값':'카드값','카 드비':'카드비','아 파트':'아파트','주 차비':'주차비','교 육비':'교육비',
+    '학 원비':'학원비','관리 비':'관리비','전기 세':'전기세','수도 세':'수도세','가스 비':'가스비',
+    '통신 비':'통신비','교통 비':'교통비','보험 료':'보험료','핸드폰 비':'핸드폰비','휴대폰 비':'휴대폰비'};
+// 정기항목 → cycle=monthly 자동 판별
+const _monthlyItems=['관리비','월세','보험료','전기세','수도세','가스비','인터넷','핸드폰','휴대폰',
+    '통신비','아파트','카드값','카드비','대출','이자','적금','학원비','교육비','보험'];
+function _fixVoiceSpacing(s){
+    let r=s;
+    for(const[k,v]of Object.entries(_voiceFixMap))r=r.replace(new RegExp(k,'g'),v);
+    // 일반 패턴: 한글 1글자 + 공백 + 한글 2글자 이상 → 붙이기 (예: "관 리비" → "관리비")
+    r=r.replace(/([가-힣])\s([가-힣]{2,})/g,(m,a,b)=>{const w=a+b;if(_monthlyItems.includes(w)||w.length<=4)return w;return m;});
+    return r;
+}
+function parseLocalCmd(q){
+    // 음성인식 띄어쓰기 보정
+    q=_fixVoiceSpacing(q);
+    // 금액 파싱: "260만" → 2600000, "15만원" → 150000, "5만" → 50000, "1300000" → 1300000
+    function parseAmt(s){
+        const m=s.match(/(\d+(?:\.\d+)?)\s*만\s*원?/);if(m)return Math.round(parseFloat(m[1])*10000);
+        const n=s.match(/(\d{4,})/);if(n)return parseInt(n[1]);
+        return 0;
+    }
+    const amt=parseAmt(q);if(!amt)return null;
+    // 동작어로 입출금 타입 판별
+    const isIn=/입금|받았|들어왔|들어옴|넣었/.test(q);
+    const isOut=/출금|지출|냈어|냈다|차감|빠졌|빼줘|빼 줘|나갔|나감|지불|결제|납부/.test(q);
+    const txType=isIn?'입금':isOut?'출금':'출금';
+    // 주기
+    let cycle='none',day=0,date=null;
+    if(/매일|매일/.test(q))cycle='daily';
+    else if(/매주/.test(q)){cycle='weekly';const dw=q.match(/([월화수목금토일])요?일?/);if(dw)day='월화수목금토일'.indexOf(dw[1])+1;if(day===7)day=0;}
+    else if(/매월/.test(q)){cycle='monthly';const dm=q.match(/(\d{1,2})\s*일/);if(dm)day=parseInt(dm[1]);}
+    else if(/내일/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+1);date=t.toISOString().slice(0,10);}
+    else if(/모레/.test(q)){cycle='once';const t=new Date();t.setDate(t.getDate()+2);date=t.toISOString().slice(0,10);}
+    else if(q.match(/(\d{1,2})\/(\d{1,2})/)){const dm=q.match(/(\d{1,2})\/(\d{1,2})/);cycle='once';const y=new Date().getFullYear();date=`${y}-${dm[1].padStart(2,'0')}-${dm[2].padStart(2,'0')}`;}
+    // 이름 추출: 금액/주기/타입/동작어/부사 제거 후 남은 핵심 명사만
+    let name=q.replace(/\d+(?:\.\d+)?\s*만\s*원?|\d{4,}|입금|출금|지출|매일|매주|매월|내일|모레|등록|해줘|해 줘|원|[월화수목금토일]요?일?|\d{1,2}\/\d{1,2}/g,'')
+        .replace(/냈어|냈다|넣어|넣었|빼줘|빼 줘|빠졌|나갔|나감|차감|받았|들어왔|들어옴|지불|결제|납부|했어|했다|좀|으로|에서|이거|그거|그걸|이번|이번달|이번 달|달에|개월|오늘|해주세요|줘|요|을|를|이|가|에|도|한|좀|다|고/g,'').trim();
+    // 남은 공백 제거 (단어 사이 불필요한 공백)
+    name=name.replace(/\s+/g,'').trim();
+    if(!name)name=txType;
+    // 정기항목 자동 cycle=monthly 판별 (명시적 주기 지정 없을 때만)
+    if(cycle==='none'&&_monthlyItems.some(mi=>name.includes(mi)))cycle='monthly';
+    const act={act:'add',name,amount:amt,txType,cycle};
+    if(cycle==='weekly')act.day=day;
+    if(cycle==='monthly')act.day=day||1;
+    if(date)act.date=date;
+    return act;
+}
+function parseLocalDel(q){
+    const m=q.match(/삭제\s*(.+)/);if(!m)return null;
+    return{act:'del',name:m[1].trim()};
+}
+
+let _aiAbort=null;
+function askAi(q){
+    try{ _askAiInner(q) }catch(e){ alert('askAi에러:'+e.message) }
+}
+async function _askAiInner(q){
+    if(!q){q=(document.getElementById('aiInput').value||'').trim();if(!q)return}
+
+    document.getElementById('aiInput').value='';
+
+    // 로컬 파서 시도 (즉시 처리)
+    const del=parseLocalDel(q);
+    if(del){
+        aiMessages.push({role:'user',text:q});
+        await executeAiAction(del);
+        aiMessages.push({role:'bot',text:`삭제 완료: ${del.name}`});
+        renderAiMsgs();if(currentTab==='settle')renderSettle();return;
+    }
+    const local=parseLocalCmd(q);
+    if(local){
+        aiMessages.push({role:'user',text:q});
+        await executeAiAction(local);
+        const info=`${local.name} ${fmt(local.amount)}원 ${local.txType} ${local.cycle}${local.date?' '+local.date:''}`;
+        aiMessages.push({role:'bot',text:`등록완료: ${info}`});
+        renderAiMsgs();if(currentTab==='settle')renderSettle();return;
+    }
+
+    // Gemini fallback
+    const key=loadAiKey();
+    if(!key){alert('Gemini API Key를 입력하세요');return}
+
+    aiMessages.push({role:'user',text:q});
+    aiMessages.push({role:'bot',text:'연결중...'});
+    renderAiMsgs();
+
+    const btn=document.getElementById('aiSendBtn');
+    _aiAbort=new AbortController();
+    btn.disabled=false;btn.textContent='중지';btn.onclick=()=>{if(_aiAbort)_aiAbort.abort();};
+
+    const ctx=buildFinCtx();
+    const sys=`당신은 BankTotal 입력 어시스턴트입니다. 주 역할은 항목등록과 규칙관리입니다.
+
+[핵심 역할 — 즉시 실행]
+- 항목 등록/삭제/수정: 사용자가 말하면 바로 액션 실행. 확인은 한줄로 짧게.
+- 규칙 등록/수정: 사업정보, 분류규칙, 직원정보 등
+- 사진 분석: 고지서/영수증에서 금액 추출 → 등록
+
+[항목명 추출 규칙 — 필수 준수]
+사용자의 자연어에서 항목명(name)을 추출할 때:
+1. 동작어는 항목명에서 제외: 냈어,냈다,넣어,넣었,빼줘,빠졌,나갔,차감,받았,들어왔,지불,결제,납부,했어,했다,줘,해줘
+2. 금액 표현은 항목명에서 제외: 15만원,260만,1300000 등
+3. 부사/조사는 항목명에서 제외: 좀,오늘,이번달,으로,에서
+4. 남은 핵심 명사만 항목명으로 사용
+5. 예시: "관리비 15만원 냈어 차감" → name="관리비", "월세 50만원 빠졌어" → name="월세"
+
+[음성입력 띄어쓰기 보정]
+사용자는 음성입력(Gboard)을 사용하여 띄어쓰기 오류가 빈번합니다:
+- "관 리비"→"관리비", "월 세"→"월세", "보 험료"→"보험료", "전 기세"→"전기세"
+- "수 도세"→"수도세", "가 스비"→"가스비", "인 터넷"→"인터넷", "통 신비"→"통신비"
+- 불필요한 공백을 제거하고 올바른 단어로 합쳐서 사용하세요
+
+[정기항목 cycle 자동 판별]
+다음 항목은 명시적 주기 지정이 없어도 cycle="monthly"로 설정:
+관리비,월세,보험료,전기세,수도세,가스비,인터넷,핸드폰,휴대폰,통신비,카드값,카드비,대출,이자,적금,학원비,교육비,보험,아파트
+- "관리비 15만원 냈어" → cycle="monthly" (매월 반복)
+- 명시적으로 "한번만","일회성" 등이 있으면 cycle="none"
+
+[입출금 타입 판별]
+- 출금 동작어: 냈어,냈다,차감,빠졌,빼줘,나갔,지불,결제,납부 → txType="출금"
+- 입금 동작어: 받았,들어왔,들어옴,넣었,입금 → txType="입금"
+- 동작어가 없으면 기본값 txType="출금"
+
+[대화 맥락]
+- 이전 대화에서 언급된 금액, 항목, 날짜를 기억하고 연결하세요
+- "넣어줘", "수정해줘" 요청 시, 직전 대화에서 나온 금액을 자동으로 사용하세요
+- 금액을 이미 알려준 뒤 "그걸로 해줘", "넣어줘" 등이 오면 추가 질문 없이 실행하세요
+- 모르는 정보가 있을 때만 질문하세요
+
+[용어 이해]
+- 블락/블록/BLOCK/블랙박스/블랙라벨/블락박스 = SPA BLOCK 계좌 차단금액(절대값) (음성인식 오류 포함)
+- 물류 = SFA 물류비 정산항목
+- 보정/수정 = 기존 항목의 금액 등을 변경 (patch 액션 사용)
+- 사파/에스피에이/스파 = SPA (음성인식 오류)
+- 에스에프에이 = SFA (음성인식 오류)
+- 사용자는 음성입력 사용 — 오타/음성인식 오류 빈번. 문맥으로 의도 파악
+
+[재무분석은 요청시에만]
+"분석해줘", "어떻게 되나", "예측" 등 명시적 요청이 있을 때만 상세 분석.
+일반 입력에는 분석 없이 등록만 실행.
+
+[응답 스타일]
+- 최대한 짧게. "등록완료: 매일입금 130만원" 수준.
+- 불필요한 설명, 인사, 이모지 금지.
+
+${ctx}
+
+[액션 태그 — 답변 맨 끝에 추가]
+등록: [ACTION]{"act":"add","name":"항목명","amount":숫자,"txType":"입금/출금","cycle":"daily/weekly/monthly/none","day":숫자}[/ACTION]
+- daily=매일, weekly=매주(day:0일~6토), monthly=매월(day:1~31), none=날짜미정(밀린금액)
+- 130만원→1300000 숫자변환 필수
+- name에는 핵심 명사만 (동작어/금액/부사 제외)
+삭제: [ACTION]{"act":"del","name":"항목명"}[/ACTION]
+수정: [ACTION]{"act":"patch","name":"항목명","patch":{"amount":숫자}}[/ACTION]
+- patch 객체에 변경할 필드만 포함 (amount, cycle, day, txType 등)
+규칙추가: [ACTION]{"act":"add_rule","rule":"내용"}[/ACTION]
+규칙삭제: [ACTION]{"act":"del_rule","rule":"내용"}[/ACTION]
+정보수정: [ACTION]{"act":"set_info","key":"income/expenses/accounts/business/people","value":"값"}[/ACTION]
+
+여러 액션은 각각 별도 [ACTION]...[/ACTION]으로.`;
+
+    let body;
+    try{
+        const contents=[{role:'user',parts:[{text:sys}]},{role:'model',parts:[{text:'네, 준비됐습니다.'}]}];
+        // 이전 대화 맥락 추가 (최근 10턴, ACTION 태그 제거)
+        const hist=aiMessages.slice(0,-2);
+        const recent=hist.slice(-20);
+        for(const m of recent){
+            const clean=(m.text||'').replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+            if(!clean)continue;
+            contents.push({role:m.role==='user'?'user':'model',parts:[{text:clean}]});
+        }
+        contents.push({role:'user',parts:[{text:q}]});
+        body=JSON.stringify({contents});
+    }catch(be){aiMessages[aiMessages.length-1].text='JSON에러:'+be.message;_aiDone(btn);return}
+
+    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key='+key;
+    const t0=Date.now();
+    let fullText='';
+    try{
+        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body,signal:_aiAbort.signal});
+        if(!res.ok){
+            const err=await res.text().catch(()=>'');
+            let msg='API에러 '+res.status;
+            try{const j=JSON.parse(err);msg=j?.error?.message||msg;}catch(e){}
+            aiMessages[aiMessages.length-1].text=msg;_aiDone(btn);return;
+        }
+        const reader=res.body.getReader();
+        const dec=new TextDecoder();
+        let buf='';
+        while(true){
+            const{done,value}=await reader.read();
+            if(done)break;
+            buf+=dec.decode(value,{stream:true});
+            const lines=buf.split('\n');
+            buf=lines.pop()||'';
+            for(const line of lines){
+                if(!line.startsWith('data: '))continue;
+                try{
+                    const d=JSON.parse(line.slice(6));
+                    const t=d?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+                    if(t){fullText+=t;aiMessages[aiMessages.length-1].text=fullText;renderAiMsgs();}
+                }catch(e){}
+            }
+        }
+        if(buf.startsWith('data: ')){try{const d=JSON.parse(buf.slice(6));const t=d?.candidates?.[0]?.content?.parts?.[0]?.text||'';if(t)fullText+=t;}catch(e){}}
+        // 스트림 완료 후 액션 처리
+        const actionMatches=[...fullText.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+        for(const m of actionMatches){try{await executeAiAction(JSON.parse(m[1]))}catch(e){}}
+        if(actionMatches.length)fullText=fullText.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+        aiMessages[aiMessages.length-1].text=fullText||'응답 없음';
+    }catch(e){
+        if(e.name==='AbortError'){aiMessages[aiMessages.length-1].text=fullText?(fullText+'\n(중지됨)'):'중지됨';}
+        else{aiMessages[aiMessages.length-1].text='에러: '+e.message;}
+    }
+    _aiDone(btn);
+}
+function _aiDone(btn){_aiAbort=null;btn.disabled=false;btn.textContent='전송';btn.onclick=()=>askAi();renderAiMsgs();}
+
+function loadLatestImage(){
+    if(typeof NativeBridge!=='undefined'){
+        try{
+            const b64=NativeBridge.getLatestImage();
+            if(b64&&b64.length>100){analyzeBase64(b64,'image/jpeg');return}
+        }catch(e){}
+    }
+    document.getElementById('aiFileInput').click();
+}
+
+async function analyzeBase64(base64,mime){
+    const key=loadAiKey();
+    if(!key){alert('Gemini API Key를 먼저 설정하세요');return}
+
+    aiMessages.push({role:'user',text:'[최근 사진 분석]'});
+    aiMessages.push({role:'bot',text:'이미지 분석 중...'});
+    renderAiMsgs();
+
+    const btn=document.getElementById('aiSendBtn');
+    btn.disabled=true;btn.textContent='...';
+
+    const ctx=buildFinCtx();
+    const prompt=`당신은 개인 재무 상담사입니다. 이 이미지를 분석하세요.
+
+고지서/청구서/영수증/은행명세서/카드내역 등 금융 문서라면:
+- 항목명, 금액, 납기일, 입금/출금 여부를 추출하세요
+- 정기 항목이면 등록 액션을 추가하세요
+- 기존 항목과 금액이 다르면, 수정이 필요할 수 있음을 알려주세요. 단, 이미지 분석에서는 [ACTION] 태그로 patch를 직접 실행하지 마세요. 사용자에게 '○○ 항목이 XX원인데, YY원으로 수정할까요?' 형태로 질문하세요.
+금융 문서가 아니면 이미지 내용을 간단히 설명하세요.
+
+${ctx}
+
+[액션 형식]
+등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]`;
+
+    try{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({contents:[{parts:[
+                {text:prompt},
+                {inline_data:{mime_type:mime,data:base64}}
+            ]}]})
+        });
+        const d=await r.json();
+        let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'분석 실패';
+        const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+        for(const m of actionMatches){try{const a=JSON.parse(m[1]);if(a.act==='patch')continue;await executeAiAction(a)}catch(e){}}
+        if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+        aiMessages[aiMessages.length-1].text=reply;
+    }catch(e){
+        aiMessages[aiMessages.length-1].text='오류: '+e.message;
+    }
+    btn.disabled=false;btn.textContent='AI';
+    renderAiMsgs();
+}
+
+async function analyzeImage(input){
+    const file=input.files[0];if(!file)return;
+    const key=loadAiKey();
+    if(!key){alert('Gemini API Key를 먼저 설정하세요');return}
+
+    const reader=new FileReader();
+    reader.onload=async function(){
+        const base64=reader.result.split(',')[1];
+        const mime=file.type||'image/jpeg';
+
+        aiMessages.push({role:'user',text:'[이미지 분석 요청]'});
+        aiMessages.push({role:'bot',text:'이미지 분석 중...'});
+        renderAiMsgs();
+
+        const btn=document.getElementById('aiSendBtn');
+        btn.disabled=true;btn.textContent='...';
+
+        const ctx=buildFinCtx();
+        const prompt=`당신은 개인 재무 상담사입니다. 이 이미지를 분석하세요.
+
+고지서/청구서/영수증/은행명세서/카드내역 등 금융 문서라면:
+- 항목명, 금액, 납기일, 입금/출금 여부를 추출하세요
+- 정기 항목이면 등록 액션을 추가하세요
+- 기존 항목과 금액이 다르면, 수정이 필요할 수 있음을 알려주세요. 단, 이미지 분석에서는 [ACTION] 태그로 patch를 직접 실행하지 마세요. 사용자에게 '○○ 항목이 XX원인데, YY원으로 수정할까요?' 형태로 질문하세요.
+
+${ctx}
+
+[액션 형식]
+등록: [ACTION]{"act":"add","name":"항목명","amount":금액,"txType":"입금또는출금","cycle":"daily또는weekly또는monthly또는none","day":숫자}[/ACTION]
+
+분석 결과를 간결하게 요약하고, 등록 가능한 항목이 있으면 액션 태그를 추가하세요.`;
+
+        try{
+            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({contents:[{parts:[
+                    {text:prompt},
+                    {inline_data:{mime_type:mime,data:base64}}
+                ]}]})
+            });
+            const d=await r.json();
+            let reply=d?.candidates?.[0]?.content?.parts?.[0]?.text||d?.error?.message||'분석 실패';
+            const actionMatches=[...reply.matchAll(/\[ACTION\](.*?)\[\/ACTION\]/g)];
+            for(const m of actionMatches){
+                try{const a=JSON.parse(m[1]);if(a.act==='patch')continue;await executeAiAction(a)}catch(e){}
+            }
+            if(actionMatches.length)reply=reply.replace(/\[ACTION\].*?\[\/ACTION\]/g,'').trim();
+            aiMessages[aiMessages.length-1].text=reply;
+        }catch(e){
+            aiMessages[aiMessages.length-1].text='오류: '+e.message;
+        }
+        btn.disabled=false;btn.textContent='AI';
+        renderAiMsgs();
+        input.value='';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function executeAiAction(act){
+    if(act.act==='add'){
+        // 중복 방지: 같은 이름+금액+타입+주기 항목이 이미 있으면 스킵
+        const dup=settleManual.find(m=>m.name===(act.name||'항목')&&m.amount===(act.amount||0)&&m.type===(act.txType||'입금')&&m.cycle===(act.cycle||'daily'));
+        if(dup){aiMessages[aiMessages.length-1].text+=' (이미 등록됨, 중복 스킵)';return}
+        const entry={name:act.name||'항목',amount:act.amount||0,type:act.txType||'입금',cycle:act.cycle||'daily',ts:Date.now()};
+        if(act.cycle==='once'&&act.date)entry.date=act.date;
+        if(act.cycle==='weekly')entry.dayOfWeek=act.day||0;
+        else if(act.cycle==='monthly')entry.dayOfMonth=act.day||1;
+        const id='sm_'+Date.now();
+        // 1) 로컬 먼저 저장 (데이터 손실 방지)
+        entry._id=id;
+        settleManual.push(entry);
+        lsCache('settle_manual',settleManual);
+        markLocalEdit();
+        // 2) Room DB 저장 (앱 내)
+        try{if(typeof NativeBridge!=='undefined')NativeBridge.saveSettleItem(JSON.stringify(entry));}catch(e){}
+        // 3) Firebase 백업
+        const {_id,...fbEntry}=entry;
+        await fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbEntry)});
+        btLog('[ADD]',`${entry.name} ${entry.amount}원 ${entry.type} ${entry.cycle} AI추가`);
+        if(currentTab==='settle')renderSettle();
+    }else if(act.act==='del'){
+        const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
+        for(const t of targets){
+            btLog('[DEL]',`${t.name} ${t.amount}원 ${t.type} ${t.cycle} AI삭제`);
+            // Room DB 삭제
+            try{if(typeof NativeBridge!=='undefined')NativeBridge.deleteSettleItemNative(t._id);}catch(e){}
+            await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'DELETE'});
+        }
+        // 로컬에서도 삭제 + localStorage 저장
+        if(targets.length){
+            const delIds=new Set(targets.map(t=>t._id));
+            settleManual=settleManual.filter(m=>!delIds.has(m._id));
+            lsCache('settle_manual',settleManual);
+            markLocalEdit();
+            aiMessages[aiMessages.length-1].text+=' ('+targets.length+'건 삭제)';
+        }
+    }else if(act.act==='patch'){
+        // 이름으로 항목 찾기 (부분 매칭 — del과 동일 패턴)
+        const targets=settleManual.filter(m=>m.name===act.name||m.name.includes(act.name)||act.name.includes(m.name));
+        if(!targets.length){aiMessages[aiMessages.length-1].text+=' (일치 항목 없음)';return}
+        if(targets.length>1){
+            // 다중 매칭 → 선택 버튼 표시
+            _pendingPatch=act.patch||{};
+            let btnHtml='<div style="margin-top:8px">어느 항목을 수정할까요?<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">';
+            for(const t of targets){
+                btnHtml+=`<button onclick="executePatchOnItem('${t._id}')" style="background:#1a237e;color:#fff;border:none;border-radius:8px;padding:8px 16px;margin:4px;font-size:13px;cursor:pointer;touch-action:manipulation">${t.name} ${fmt(t.amount)}원</button>`;
+            }
+            btnHtml+='</div></div>';
+            aiMessages[aiMessages.length-1].text+=btnHtml;
+            return;
+        }
+        _pendingPatch=act.patch||{};
+        await executePatchOnItem(targets[0]._id);
+    }else if(act.act==='add_rule'){
+        const rules=aiRules.rules||[];
+        rules.push(act.rule);
+        await fetch(FB+'/banktotal/ai_rules/rules.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules)});
+        aiRules.rules=rules;
+    }else if(act.act==='del_rule'){
+        const rules=(aiRules.rules||[]).filter(r=>r!==act.rule);
+        await fetch(FB+'/banktotal/ai_rules/rules.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules)});
+        aiRules.rules=rules;
+    }else if(act.act==='set_info'){
+        const val=act.value;
+        await fetch(FB+'/banktotal/ai_rules/'+act.key+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)});
+        aiRules[act.key]=val;
+    }
+}
+
+let _pendingPatch={};
+async function executePatchOnItem(itemId){
+    const t=settleManual.find(m=>m._id===itemId);
+    if(!t){return}
+    const patch=_pendingPatch;
+    const oldAmount=t.amount;
+    // 허용 필드만 적용
+    const allowed=['amount','cycle','day','dayOfWeek','dayOfMonth','txType','type','name'];
+    const fbPatch={};
+    for(const k of Object.keys(patch)){
+        if(allowed.includes(k)){
+            if(k==='txType'){t.type=patch[k];fbPatch.type=patch[k]}
+            else{t[k]=patch[k];fbPatch[k]=patch[k]}
+        }
+    }
+    // 로컬 먼저 저장
+    lsCache('settle_manual',settleManual);
+    markLocalEdit();
+    // Firebase PATCH — 변경 필드만 전송
+    await fetch(FB+'/banktotal/settle/manual/'+t._id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(fbPatch)});
+    // Room DB 동기화
+    try{if(_hasNB)NativeBridge.saveSettleItem(JSON.stringify(t))}catch(e){}
+    btLog('[PATCH]',`${t.name} ${JSON.stringify(patch)} AI수정`);
+    // 수정 결과 toast 배너
+    if(patch.amount!==undefined){
+        showPatchToast(t.name,oldAmount,patch.amount);
+    }
+    aiMessages[aiMessages.length-1].text=aiMessages[aiMessages.length-1].text.replace(/<div style="margin-top:8px">[\s\S]*<\/div><\/div>/,'') + ' (수정완료: '+t.name+')';
+    _pendingPatch={};
+    renderAiMsgs();
+    if(currentTab==='settle')renderSettle();
+}
+
+function showPatchToast(name,oldAmt,newAmt){
+    const fb=document.createElement('div');
+    fb.textContent=name+': '+fmt(oldAmt)+'원 → '+fmt(newAmt)+'원';
+    fb.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#4caf5033;color:#e0e0e0;border-left:3px solid #4caf50;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:999;max-width:90%;text-align:center;';
+    document.body.appendChild(fb);
+    setTimeout(()=>fb.remove(),3000);
+}
+
+function delAiPair(pi){
+    // pi = pair index (0-based). pair = messages[pi*2] + messages[pi*2+1]
+    const idx=pi*2;
+    if(idx+1<aiMessages.length)aiMessages.splice(idx,2);
+    else aiMessages.splice(idx,1);
+    renderAiMsgs();
+}
+function clearAiMsgs(){aiMessages=[];renderAiMsgs();}
+let _aiMsgsOpen=false;
+function toggleAiMsgs(){
+    _aiMsgsOpen=!_aiMsgsOpen;
+    document.getElementById('aiMsgs').style.display=_aiMsgsOpen?'block':'none';
+    document.getElementById('aiToggle').innerHTML=_aiMsgsOpen?'&#9650;':'&#9660;';
+}
+// 스와이프 삭제 상태
+let _aiSw=null;
+function aiSwStart(e,pi){_aiSw={pi,sx:e.touches[0].clientX,el:e.currentTarget.querySelector('.ap-inner'),moved:false}}
+function aiSwMove(e){
+    if(!_aiSw)return;
+    const dx=e.touches[0].clientX-_aiSw.sx;
+    if(dx<-10){_aiSw.moved=true;_aiSw.el.style.transform='translateX('+Math.max(dx,-70)+'px)';}
+}
+function aiSwEnd(){
+    if(!_aiSw)return;
+    if(_aiSw.moved){
+        const dx=parseFloat(_aiSw.el.style.transform.replace(/[^-\d.]/g,''))||0;
+        if(dx<=-50){delAiPair(_aiSw.pi);}
+        else{_aiSw.el.style.transform='';}
+    }
+    _aiSw=null;
+}
+function _clipCopy(text,btnEl){
+    function ok(){if(btnEl){var orig=btnEl.textContent;btnEl.textContent='복사됨!';btnEl.style.color='#4fc3f7';setTimeout(function(){btnEl.textContent=orig;btnEl.style.color='';},1200);}}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(ok).catch(function(){_clipFallback(text);ok();});}
+    else{_clipFallback(text);ok();}
+}
+function _clipFallback(text){var ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(ta);}
+function copyAiText(pi,ev){
+    if(ev){ev.stopPropagation();ev.preventDefault();}
+    var btn=ev&&ev.currentTarget;
+    var pairs=[];for(var i=0;i<aiMessages.length;i+=2){var q=aiMessages[i],a=aiMessages[i+1];pairs.push({q:q?q.text:'',a:a?a.text:''});}
+    if(pairs[pi])_clipCopy(pairs[pi].a.replace(/<[^>]*>/g,''),btn);
+}
+function copyAcct(num,ev){
+    if(ev){ev.stopPropagation();ev.preventDefault();}
+    var clean=num.replace(/[^\d]/g,'');
+    _clipCopy(clean,ev&&ev.currentTarget);
+}
+function _wrapAcctNums(html){
+    return html.replace(/(\d{2,6}[-\s]?\d{2,8}[-\s]?\d{2,8}([-\s]?\d{1,4})?)/g,function(m){
+        var clean=m.replace(/[^\d\-\s]/g,'');
+        return '<span class="ap-acct" onclick="copyAcct(\''+m.replace(/'/g,"\\'")+'\',event)">'+m+'</span>';
+    });
+}
+function renderAiMsgs(){
+    const el=document.getElementById('aiMsgs');if(!el)return;
+    if(aiMessages.length>0&&!_aiMsgsOpen)toggleAiMsgs();
+    // 세트 단위 (user+bot = 1 pair)
+    const pairs=[];
+    for(let i=0;i<aiMessages.length;i+=2){
+        const q=aiMessages[i];
+        const a=aiMessages[i+1];
+        pairs.push({q:q?q.text:'',a:a?a.text:'...'});
+    }
+    let h=pairs.length>1?'<div style="text-align:right;padding:2px 4px"><span onclick="clearAiMsgs()" style="font-size:10px;color:#707088;cursor:pointer">전체삭제</span></div>':'';
+    h+=pairs.map((p,i)=>{
+        let aHtml=p.a.replace(/\n/g,'<br>');
+        aHtml=_wrapAcctNums(aHtml);
+        return `<div class="ai-pair" ontouchstart="aiSwStart(event,${i})" ontouchmove="aiSwMove(event)" ontouchend="aiSwEnd()">
+        <div class="ap-del">삭제</div>
+        <div class="ap-inner" style="position:relative;z-index:1;background:#1e1e30;transition:transform .15s">
+            <div class="ap-q">${p.q.replace(/\n/g,'<br>')}</div>
+            <div class="ap-a">${aHtml}<span class="ap-copy" onclick="copyAiText(${i},event)">복사</span></div>
+        </div>
+    </div>`;}).join('');
+    el.innerHTML=h;
+    el.scrollTop=el.scrollHeight;
+    if(aiMessages.length===0&&_aiMsgsOpen)toggleAiMsgs();
+}
+
+// --- 새로고침 (로컬 데이터 보존 + Firebase 최신값 병합) ---
+function doRefresh(){
+    const btn=document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    setTimeout(()=>btn.classList.remove('spinning'),600);
+    // 1) 현재 데이터를 localStorage에 백업
+    lsCache('accounts',accounts);
+    lsCache('settle_manual',settleManual);
+    lsCache('sfa_daily',sfaDaily);
+    if(transactions.length)lsCache('transactions_raw',transactions);
+    // 2) Firebase에서 계좌/거래만 최신 갱신 (settle/SFA는 로컬 유지)
+    fetch(FB+'/banktotal/accounts.json').then(r=>r.json()).then(d=>{
+        if(d){accounts=d;lsCache('accounts',accounts);renderAccounts();autoSyncSfaDaily();if(currentTab==='settle')renderSettle();}
+    }).catch(()=>{});
+    fetch(FB+'/banktotal/transactions.json').then(r=>r.json()).then(d=>{
+        if(d){transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));lsCache('transactions',d);renderLedger();}
+    }).catch(()=>{});
+    fetch(FB+'/banktotal/logs.json').then(r=>r.json()).then(d=>{
+        if(d){logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLogs();}
+    }).catch(()=>{});
+}
+
 // --- 초기화 ---
 window.onload=function(){
+    loadCachedData(); // localStorage 캐시 먼저 렌더 (새로고침 시 즉시 표시)
     if(typeof NativeBridge!=='undefined'){
         loadFromNative();
-        // 네이티브에서도 Firebase SSE로 거래/로그 데이터 로드
         initSSE();
     }else{
         initSSE();
     }
     renderPermissions();
+    loadAiKey();
+    try{const v=NativeBridge.getAppVersion();if(v)document.getElementById('appVer').textContent='v'+v;}catch(e){}
 
+    // AI 입력: Enter 전송 (IME 조합 중 아닌 경우만)
+    var _composing=false;
+    var ai=document.getElementById('aiInput');
+    if(ai){
+        ai.addEventListener('compositionstart',function(){_composing=true});
+        ai.addEventListener('compositionend',function(){_composing=false});
+        ai.addEventListener('keydown',function(e){if(!_composing&&e.key==='Enter'){e.preventDefault();askAi();}});
+    }
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};
 };

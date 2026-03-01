@@ -87,6 +87,10 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 .ai-pair .ap-q{padding:6px 10px;font-size:12px;color:#4fc3f7;border-bottom:1px solid #2a2a45}
 .ai-pair .ap-a{padding:8px 10px;font-size:13px;color:#e0e0e0;line-height:1.5;white-space:pre-wrap}
 .ai-pair .ap-del{position:absolute;right:0;top:0;bottom:0;width:60px;background:#ef5350;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:bold}
+.ap-copy{font-size:11px;color:#888;cursor:pointer;float:right;margin-top:4px;padding:2px 6px;border-radius:4px;user-select:none;-webkit-tap-highlight-color:transparent}
+.ap-copy:active{background:#333;color:#4fc3f7}
+.ap-acct{color:#4fc3f7;text-decoration:underline;text-decoration-style:dotted;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ap-acct:active{background:#4fc3f722;border-radius:3px}
 .ai-input-row{display:flex;gap:6px}
 .ai-input{flex:1;padding:10px;background:#2a2a40;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;outline:none}
 .ai-send{padding:10px 16px;background:#4fc3f7;color:#121212;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer}
@@ -1683,6 +1687,29 @@ function aiSwEnd(){
     }
     _aiSw=null;
 }
+function _clipCopy(text,btnEl){
+    function ok(){if(btnEl){var orig=btnEl.textContent;btnEl.textContent='복사됨!';btnEl.style.color='#4fc3f7';setTimeout(function(){btnEl.textContent=orig;btnEl.style.color='';},1200);}}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(ok).catch(function(){_clipFallback(text);ok();});}
+    else{_clipFallback(text);ok();}
+}
+function _clipFallback(text){var ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(ta);}
+function copyAiText(pi,ev){
+    if(ev){ev.stopPropagation();ev.preventDefault();}
+    var btn=ev&&ev.currentTarget;
+    var pairs=[];for(var i=0;i<aiMessages.length;i+=2){var q=aiMessages[i],a=aiMessages[i+1];pairs.push({q:q?q.text:'',a:a?a.text:''});}
+    if(pairs[pi])_clipCopy(pairs[pi].a.replace(/<[^>]*>/g,''),btn);
+}
+function copyAcct(num,ev){
+    if(ev){ev.stopPropagation();ev.preventDefault();}
+    var clean=num.replace(/[^\d]/g,'');
+    _clipCopy(clean,ev&&ev.currentTarget);
+}
+function _wrapAcctNums(html){
+    return html.replace(/(\d{2,6}[-\s]?\d{2,8}[-\s]?\d{2,8}([-\s]?\d{1,4})?)/g,function(m){
+        var clean=m.replace(/[^\d\-\s]/g,'');
+        return '<span class="ap-acct" onclick="copyAcct(\''+m.replace(/'/g,"\\'")+'\',event)">'+m+'</span>';
+    });
+}
 function renderAiMsgs(){
     const el=document.getElementById('aiMsgs');if(!el)return;
     if(aiMessages.length>0&&!_aiMsgsOpen)toggleAiMsgs();
@@ -1694,13 +1721,16 @@ function renderAiMsgs(){
         pairs.push({q:q?q.text:'',a:a?a.text:'...'});
     }
     let h=pairs.length>1?'<div style="text-align:right;padding:2px 4px"><span onclick="clearAiMsgs()" style="font-size:10px;color:#707088;cursor:pointer">전체삭제</span></div>':'';
-    h+=pairs.map((p,i)=>`<div class="ai-pair" ontouchstart="aiSwStart(event,${i})" ontouchmove="aiSwMove(event)" ontouchend="aiSwEnd()">
+    h+=pairs.map((p,i)=>{
+        let aHtml=p.a.replace(/\n/g,'<br>');
+        aHtml=_wrapAcctNums(aHtml);
+        return `<div class="ai-pair" ontouchstart="aiSwStart(event,${i})" ontouchmove="aiSwMove(event)" ontouchend="aiSwEnd()">
         <div class="ap-del">삭제</div>
         <div class="ap-inner" style="position:relative;z-index:1;background:#1e1e30;transition:transform .15s">
             <div class="ap-q">${p.q.replace(/\n/g,'<br>')}</div>
-            <div class="ap-a">${p.a.replace(/\n/g,'<br>')}</div>
+            <div class="ap-a">${aHtml}<span class="ap-copy" onclick="copyAiText(${i},event)">복사</span></div>
         </div>
-    </div>`).join('');
+    </div>`;}).join('');
     el.innerHTML=h;
     el.scrollTop=el.scrollHeight;
     if(aiMessages.length===0&&_aiMsgsOpen)toggleAiMsgs();

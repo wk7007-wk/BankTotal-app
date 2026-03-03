@@ -102,12 +102,6 @@ body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;min-h
 <div class="header" id="header">
     <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">&#x21bb;</button>
     <span id="appVer" style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;color:#555"></span>
-    <div class="subtotal-row" id="subtotalRow">
-        <div style="color:#888;font-size:12px">소계</div>
-        <span class="subtotal-val" id="subtotalVal">0</span>
-    </div>
-    <div class="total-label">합산</div>
-    <div class="total-val" id="totalVal">0</div>
     <div class="last-update" id="lastUpdate">마지막 업데이트: --</div>
 </div>
 
@@ -413,17 +407,6 @@ function renderNativeAccounts(list){
     list.forEach(a=>{
         if(a.isActive){total+=a.balance;if(a.balance>=0)subtotal+=a.balance;}
     });
-    const tvEl=document.getElementById('totalVal');
-    tvEl.textContent=fmt(total);
-    tvEl.style.color=total>0?'#4fc3f7':total<0?'#ef5350':'#e0e0e0';
-    if(subtotal!==total){
-        document.getElementById('subtotalRow').classList.add('show');
-        const svEl=document.getElementById('subtotalVal');
-        svEl.textContent=fmt(subtotal);
-        svEl.style.color=subtotal>0?'#4fc3f7':subtotal<0?'#ef5350':'#e0e0e0';
-    }else{
-        document.getElementById('subtotalRow').classList.remove('show');
-    }
     const lastUp=Math.max(...list.map(a=>a.lastUpdated||0));
     document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';
 
@@ -448,22 +431,10 @@ function renderAccounts(){
     const list=Object.values(accounts);
     if(!list.length){
         document.getElementById('accountList').innerHTML='<div class="empty">계좌 없음</div>';
-        document.getElementById('totalVal').textContent='0';
         return;
     }
     let total=0,subtotal=0;
     list.forEach(a=>{total+=a.balance||0;if((a.balance||0)>=0)subtotal+=a.balance||0;});
-    const tvEl2=document.getElementById('totalVal');
-    tvEl2.textContent=fmt(total);
-    tvEl2.style.color=total>0?'#4fc3f7':total<0?'#ef5350':'#e0e0e0';
-    if(subtotal!==total){
-        document.getElementById('subtotalRow').classList.add('show');
-        const svEl=document.getElementById('subtotalVal');
-        svEl.textContent=fmt(subtotal);
-        svEl.style.color=subtotal>0?'#4fc3f7':subtotal<0?'#ef5350':'#e0e0e0';
-    }else{
-        document.getElementById('subtotalRow').classList.remove('show');
-    }
 
     const lastUp=Math.max(...list.map(a=>a.updated||0));
     document.getElementById('lastUpdate').textContent=lastUp>0?`마지막 업데이트: ${tsFmt(lastUp)}`:'마지막 업데이트: --';

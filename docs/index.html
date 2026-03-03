@@ -183,6 +183,10 @@ const BT_DATA_VER='2';
 function lsCache(key,data){try{localStorage.setItem('bt_'+key,JSON.stringify(data))}catch(e){}}
 function lsLoad(key){try{const s=localStorage.getItem('bt_'+key);return s?JSON.parse(s):null}catch(e){return null}}
 let _localEditTs=0; // 로컬 수정 후 300초간 Firebase 덮어쓰기 방지
+// 삭제 ID 추적 (SSE 병합 시 삭제된 항목 부활 방지, 24시간 TTL)
+let _deletedIds=(function(){try{const raw=JSON.parse(localStorage.getItem('bt_deleted_ids')||'{}');const now=Date.now();const clean={};Object.keys(raw).forEach(k=>{if(now-raw[k]<86400000)clean[k]=raw[k];});return clean;}catch(e){return {};}})();
+function _addDeletedId(id){_deletedIds[id]=Date.now();try{localStorage.setItem('bt_deleted_ids',JSON.stringify(_deletedIds))}catch(e){}}
+function _isDeletedId(id){if(!_deletedIds[id])return false;if(Date.now()-_deletedIds[id]>=86400000){delete _deletedIds[id];return false;}return true;}
 function markLocalEdit(){_localEditTs=Date.now();lsCache('_localEditTs',_localEditTs);}
 function isLocalEditRecent(){
     if(!_localEditTs){const saved=lsLoad('_localEditTs');if(saved)_localEditTs=saved;}
@@ -333,13 +337,19 @@ function initSSE(){
             const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
             const merged=[...settleManual];
             const mergedIds=new Set(merged.map(m=>m._id));
-            remote.forEach(r=>{if(!mergedIds.has(r._id)){merged.push(r);mergedIds.add(r._id);}});
+            remote.forEach(r=>{if(!mergedIds.has(r._id)&&!_isDeletedId(r._id)){merged.push(r);mergedIds.add(r._id);}});
             settleManual=merged;
             lsCache('settle_manual',settleManual);
             if(currentTab==='settle')renderSettle();
         });
         connectSSE('/banktotal/settle/auto',d=>{
-            settleAuto=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            if(isLocalEditRecent())return;
+            const remote=d?Object.entries(d).map(([k,v])=>({...v,_id:k})):[];
+            const merged=[...settleAuto];
+            const mergedIds=new Set(merged.map(m=>m._id));
+            remote.forEach(r=>{if(!mergedIds.has(r._id)&&!_isDeletedId(r._id)){merged.push(r);mergedIds.add(r._id);}});
+            settleAuto=merged;
+            lsCache('settle_auto',settleAuto);
             if(currentTab==='settle')renderSettle();
         });
         connectSSE('/banktotal/sfa_daily',d=>{
@@ -618,7 +628,7 @@ function saveItemState(){
     // Room DB에도 동기화
     if(_hasNB&&NativeBridge.saveItemStateNative){
         Object.entries(itemState).forEach(([k,v])=>{
-            try{NativeBridge.saveItemStateNative(JSON.stringify({key:k,ex:!!v.ex,sh:v.sh||0,st:v.st||'',_ov:!!v._ov}))}catch(e){}
+            try{NativeBridge.saveItemStateNative(JSON.stringify({key:k,ex:!!v.ex,sh:v.sh||0,st:v.st||'',_ov:!!v._ov,hid:!!v.hid}))}catch(e){}
         });
     }
 }
@@ -643,6 +653,7 @@ function deleteSettleItem(id){
         fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'});
         settleManual.splice(mi,1);
         lsCache('settle_manual',settleManual);
+        _addDeletedId(id);
         markLocalEdit();
     }else{
         const ai=settleAuto.findIndex(a=>a._id===id);
@@ -651,6 +662,8 @@ function deleteSettleItem(id){
             fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'});
             settleAuto.splice(ai,1);
             lsCache('settle_auto',settleAuto);
+            _addDeletedId(id);
+            markLocalEdit();
         }
     }
     // Room DB에서도 삭제
@@ -1099,7 +1112,8 @@ function generateAllItems(manual,auto,days){
         if(m.cycle==='none'){
             const key=m._id;
             const st=ist(key);
-            const day=Math.max(0,Math.min(29,st.sh));
+            const day=st.sh||0;
+            if(day<0||day>=days)return;
             const d=new Date(now.getTime()+day*86400000);
             result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:d.getTime(),_key:key,_id:m._id,cycle:m.cycle,isPending:true,excluded:st.ex});
             return;
@@ -1123,7 +1137,8 @@ function generateAllItems(manual,auto,days){
                 const dateKey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
                 const key=m._id+'_'+dateKey;
                 const st=ist(key);
-                const adjDay=Math.max(0,Math.min(29,i+st.sh));
+                const adjDay=i+(st.sh||0);
+                if(adjDay<0||adjDay>=days)continue;
                 const nd=new Date(now.getTime()+adjDay*86400000);
                 result.push({name:m.name,amount:m.amount||0,type:m.type||'출금',date:nd.getTime(),_key:key,_id:m._id,cycle:m.cycle,excluded:st.ex});
             }
@@ -1133,7 +1148,8 @@ function generateAllItems(manual,auto,days){
         if(a.cycle==='none'){
             const key=a._id;
             const st=ist(key);
-            const day=Math.max(0,Math.min(29,st.sh));
+            const day=st.sh||0;
+            if(day<0||day>=days)return;
             const d=new Date(now.getTime()+day*86400000);
             result.push({name:a.name||a.source||'밀림',amount:a.amount||0,type:a.type||'출금',date:d.getTime(),_key:key,_id:a._id,cycle:'none',isPending:true,excluded:st.ex});
             return;
@@ -1146,7 +1162,8 @@ function generateAllItems(manual,auto,days){
             const origDay=Math.round((showDate-now.getTime())/86400000);
             const key=a._id;
             const st=ist(key);
-            const newDay=Math.max(0,Math.min(29,origDay+st.sh));
+            const newDay=origDay+(st.sh||0);
+            if(newDay<0||newDay>=days)return;
             const nd=new Date(now.getTime()+newDay*86400000);
             result.push({name:a.name||a.source||'고지서',amount:a.amount||0,type:tp,date:nd.getTime(),_key:key,_id:a._id,cycle:a.cycle||'none',overdue:a.dueDate&&a.dueDate<now.getTime(),excluded:st.ex});
         }
@@ -1158,12 +1175,18 @@ function deleteSettle(id){
     if(!confirm('삭제하시겠습니까?'))return;
     fetch(FB+'/banktotal/settle/manual/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
     try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
+    const mi=settleManual.findIndex(m=>m._id===id);
+    if(mi>=0){settleManual.splice(mi,1);lsCache('settle_manual',settleManual);}
+    _addDeletedId(id);markLocalEdit();renderSettle();
 }
 
 function deleteAutoSettle(id){
     if(!confirm('삭제하시겠습니까?'))return;
     fetch(FB+'/banktotal/settle/auto/'+id+'.json',{method:'DELETE'}).catch(()=>alert('삭제 실패'));
     try{if(_hasNB)NativeBridge.deleteSettleItemNative(id)}catch(e){}
+    const ai=settleAuto.findIndex(a=>a._id===id);
+    if(ai>=0){settleAuto.splice(ai,1);lsCache('settle_auto',settleAuto);}
+    _addDeletedId(id);markLocalEdit();renderSettle();
 }
 
 // --- AI 재무상담 (Gemini API) ---

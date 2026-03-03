@@ -138,6 +138,7 @@ class SettleRepository(context: Context) {
         if (item.cycle == "none") {
             val st = states[item.id]
             val shift = (st?.dateShift ?: 0).coerceIn(-1, 29)
+            if (shift < 0 || shift >= days) return
             val d = todayMs + shift * 86400000L
             out.add(MutableSettleItem(
                 key = item.id, itemId = item.id, name = item.name,
@@ -170,7 +171,8 @@ class SettleRepository(context: Context) {
             val stateKey = "${item.id}_$dateKey"
             val st = states[stateKey]
             val shift = (st?.dateShift ?: 0).coerceIn(-1, 29)
-            val adjDay = (i + shift).coerceIn(0, 29)
+            val adjDay = i + shift
+            if (adjDay < 0 || adjDay >= days) continue
             val adjMs = todayMs + adjDay * 86400000L
 
             out.add(MutableSettleItem(

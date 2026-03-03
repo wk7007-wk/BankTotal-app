@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PendingCorrectionEntity::class,
         MatchLogEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class BankDatabase : RoomDatabase() {
@@ -128,13 +128,19 @@ abstract class BankDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE settle_item_states ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): BankDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     BankDatabase::class.java,
                     "banktotal.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
             }
         }
     }

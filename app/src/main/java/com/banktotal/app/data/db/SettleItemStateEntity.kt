@@ -35,6 +35,9 @@ data class SettleItemStateEntity(
     @ColumnInfo(name = "manual_override")
     val manualOverride: Boolean = false,
 
+    /** true이면 당일 삭제(숨김) — excludeDay()에서 설정 */
+    val hidden: Boolean = false,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 )

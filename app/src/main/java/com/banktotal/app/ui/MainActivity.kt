@@ -317,6 +317,7 @@ class MainActivity : AppCompatActivity() {
                         put("sh", s.dateShift)
                         put("st", s.status ?: "")
                         if (s.manualOverride) put("_ov", true)
+                        if (s.hidden) put("hid", true)
                     })
                 }
                 obj.toString()
@@ -377,7 +378,8 @@ class MainActivity : AppCompatActivity() {
                         excluded = j.optBoolean("ex", false),
                         dateShift = j.optInt("sh", 0).coerceIn(-1, 29),
                         status = j.optString("st", "").ifEmpty { null },
-                        manualOverride = j.optBoolean("_ov", false)
+                        manualOverride = j.optBoolean("_ov", false),
+                        hidden = j.optBoolean("hid", false)
                     )
                     BankDatabase.getInstance(applicationContext).settleItemStateDao().upsert(state)
                     FirebaseBackupWriter.backupItemState(state)

@@ -711,13 +711,19 @@ function renderSettle(){
             u.excluded=true;u._autoExclude='출금확인';
         }
     });
-    // 날짜 지난 항목 처리: 출금만 이월, 입금은 자동 제외 (잔고에 이미 반영)
+    // 날짜 지난 항목 처리: 어제 출금만 오늘로 이월, 2일전 이상은 자동제외
     const todayTs=now.getTime();
+    const yesterdayTs=todayTs-86400000; // 어제 자정
     items.forEach(u=>{
         if(ist(u._key)._ov)return; // 수동 override 있으면 자동제외 안 함
-        if(u.date<todayTs&&!u.excluded){
+        if(u.date>=todayTs||u.excluded)return; // 오늘 이후 또는 이미 제외된 건 건드리지 않음
+        if(u.date>=yesterdayTs){
+            // 어제 항목: 입금은 자동제외, 출금은 오늘로 이월
             if(u.type==='입금'){u.excluded=true;u._autoExclude='이월삭제';}
-            else u.date=todayTs; // 출금만 오늘로 이월
+            else u.date=todayTs;
+        } else {
+            // 2일 전 이상: 모두 자동제외
+            u.excluded=true;u._autoExclude='기간만료';
         }
     });
     // 중복 제거: 같은 날짜+같은 이름+같은 타입 → 최초 1건만 유지

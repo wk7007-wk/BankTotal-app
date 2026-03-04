@@ -508,16 +508,66 @@ function renderLedger(){
 }
 
 function editTxAmount(id,cur){
-    const v=prompt('금액 수정',cur);
-    if(v===null)return;
-    const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
-    if(amt===cur||amt<=0)return;
-    fetch(FB+'/banktotal/transactions/'+id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt})});
     const tx=transactions.find(t=>t._id===id);
-    if(tx){tx.amount=amt;}
+    const isOut=tx&&tx.type==='출금';
+    if(isOut){
+        // 출금: 부분출금 or 전체수정
+        const d=document.createElement('div');
+        d.id='txEditMenu';
+        d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        d.innerHTML=`<div style="background:#222;border-radius:12px;padding:20px;width:260px;text-align:center">
+            <div style="color:#aaa;font-size:13px;margin-bottom:12px">${tx.counterparty||tx.bank||''} ${fmt(cur)}원</div>
+            <div style="margin-bottom:10px">
+                <input id="partialAmt" type="tel" placeholder="부분 출금액 입력" style="width:90%;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:8px;font-size:15px;text-align:center">
+            </div>
+            <div id="partialResult" style="color:#4fc3f7;font-size:13px;margin-bottom:12px;min-height:20px"></div>
+            <div style="display:flex;gap:8px;justify-content:center">
+                <button onclick="applyPartialTx('${id}',${cur})" style="flex:1;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:13px">적용</button>
+                <button onclick="document.getElementById('txEditMenu').remove()" style="flex:1;padding:10px;background:#555;color:#fff;border:none;border-radius:8px;font-size:13px">닫기</button>
+            </div>
+        </div>`;
+        document.body.appendChild(d);
+        d.addEventListener('click',function(e){if(e.target===d)d.remove()});
+        const inp=document.getElementById('partialAmt');
+        inp.addEventListener('input',function(){
+            const v=parseInt(this.value.replace(/[^0-9]/g,''),10)||0;
+            const remain=cur-v;
+            document.getElementById('partialResult').innerHTML=v>0&&v<cur?`차액: <span style="color:#ef5350">${fmt(remain)}원</span> 남음`:v>=cur?'<span style="color:#ff9800">전액 이상</span>':'';
+        });
+        inp.focus();
+    }else{
+        const v=prompt('금액 수정',cur);
+        if(v===null)return;
+        const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
+        if(amt===cur||amt<=0)return;
+        fetch(FB+'/banktotal/transactions/'+id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt})});
+        if(tx){tx.amount=amt;}
+        markLocalEdit();
+        renderLedger();
+    }
+}
+function applyPartialTx(id,origAmt){
+    const inp=document.getElementById('partialAmt');
+    const v=parseInt((inp?inp.value:'').replace(/[^0-9]/g,''),10)||0;
+    if(v<=0){alert('금액을 입력하세요');return;}
+    if(v>=origAmt){alert('부분 출금액은 원래 금액보다 작아야 합니다');return;}
+    const remain=origAmt-v;
+    // 원래 거래 금액을 부분 출금액으로 변경
+    fetch(FB+'/banktotal/transactions/'+id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:v})});
+    const tx=transactions.find(t=>t._id===id);
+    if(tx){tx.amount=v;}
+    // 차액으로 새 거래 생성 (같은 정보, 금액만 차액)
+    if(tx){
+        const newTx={type:'출금',amount:remain,bank:tx.bank||'',counterparty:(tx.counterparty||'')+'(잔액)',ts:Date.now(),balance:0};
+        const newId='ptx_'+Date.now();
+        fetch(FB+'/banktotal/transactions/'+newId+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(newTx)});
+        newTx._id=newId;
+        transactions.unshift(newTx);
+    }
     markLocalEdit();
+    document.getElementById('txEditMenu').remove();
     renderLedger();
-    btLog('[EDIT]',`거래 금액 수정: ${cur}→${amt}`);
+    btLog('[PARTIAL]',`부분출금: ${id} ${origAmt}→${v}, 잔액 ${remain}`);
 }
 
 function renderCategory(withdrawals){
@@ -609,6 +659,10 @@ function _loadItemState(){
     }catch(e){}
 }
 _loadItemState();
+// 정산 계좌 예측 (어느 은행에서 출금되는지)
+function loadSettleBankMap(){try{return JSON.parse(localStorage.getItem('bt_settle_bank')||'{}')}catch(e){return{}}}
+function saveSettleBankMap(m){try{localStorage.setItem('bt_settle_bank',JSON.stringify(m))}catch(e){}}
+var settleBankMap=loadSettleBankMap();
 function saveItemState(){
     try{localStorage.setItem('settleItemState',JSON.stringify(itemState))}catch(e){}
     // Room DB에도 동기화
@@ -832,12 +886,13 @@ function renderSettle(){
                 const stk=u.excluded?'text-decoration:line-through;':'';
                 const cfBg=iSt==='confirmed'?'background:#4caf50;color:#fff;':'background:#333;color:#888;';
                 const pdBg=iSt==='pending'?'background:#ff9800;color:#fff;':'background:#333;color:#888;';
+                const bankPred=(!u.excluded&&u.type==='출금'&&iSt!=='confirmed'&&settleBankMap[u.name])?` <span style="font-size:9px;color:#666;background:#333;padding:1px 4px;border-radius:3px">${settleBankMap[u.name]}</span>`:'';
                 html+=`<div style="display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a1a;${bg}${op}">
                     <span style="min-width:40px;display:flex;gap:2px">
                         <span onclick="setItemStatus('${u._key}','confirmed')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${cfBg}">확</span>
                         <span onclick="setItemStatus('${u._key}','pending')" style="font-size:9px;padding:2px 4px;border-radius:3px;cursor:pointer;${pdBg}">미</span>
                     </span>
-                    <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}</span>
+                    <span ontouchstart="swStart(event,'${u._key}')" style="flex:1;font-size:12px;color:${nmC};cursor:pointer;touch-action:pan-y">${stIcon}${u.name}${u.overdue?' (지연)':''}${tag}${bankPred}</span>
                     <span onclick="settleItemMenu('${u._key}','${u._id}',${u.amount},${!!u._sfaKey},'${u._sfaKey||''}','${u.cycle||'none'}')" style="min-width:55px;text-align:right;font-size:12px;color:${amtC};${stk};cursor:pointer;touch-action:manipulation;margin-right:6px;padding:6px 2px">${isIn?'+':'-'}${fmt(u.amount)}</span>
                     <span style="min-width:60px;text-align:right;font-size:13px;font-weight:bold;color:${bal>0?'#4fc3f7':bal<0?'#ef5350':'#e0e0e0'}">${fmt(bal)}</span>
                 </div>`;
@@ -962,6 +1017,8 @@ function autoConfirmSettle(newOutTxs){
             const s=ist(key);
             if(s.st==='confirmed')return;
             s.st='confirmed';
+            // 계좌 예측 저장: 이 고정비가 어느 은행에서 출금되었는지
+            if(tx.bank){settleBankMap[m.name]=tx.bank;saveSettleBankMap(settleBankMap);}
             changed=true;
             btLog('[CONFIRM]',`자동확인: ${cp}→${m.name} ${tx.amount}원`);
             saveMatchLog(cp,m.name,tx.amount,m.amount,true);
@@ -1824,13 +1881,23 @@ window.onload=function(){
     loadAiKey();
     try{const v=NativeBridge.getAppVersion();if(v)document.getElementById('appVer').textContent='v'+v;}catch(e){}
 
-    // AI 입력: Enter 전송 (IME 조합 중 아닌 경우만)
+    // AI 입력: Enter 전송 (한글 조합 중에도 한 번으로 전송)
     var _composing=false;
+    var _enterDurCompose=false;
     var ai=document.getElementById('aiInput');
     if(ai){
-        ai.addEventListener('compositionstart',function(){_composing=true});
-        ai.addEventListener('compositionend',function(){_composing=false});
-        ai.addEventListener('keydown',function(e){if(!_composing&&e.key==='Enter'){e.preventDefault();askAi();}});
+        ai.addEventListener('compositionstart',function(){_composing=true;_enterDurCompose=false});
+        ai.addEventListener('compositionend',function(){
+            _composing=false;
+            if(_enterDurCompose){_enterDurCompose=false;setTimeout(function(){askAi()},50);}
+        });
+        ai.addEventListener('keydown',function(e){
+            if(e.key==='Enter'){
+                e.preventDefault();
+                if(_composing){_enterDurCompose=true;}
+                else{askAi();}
+            }
+        });
     }
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};

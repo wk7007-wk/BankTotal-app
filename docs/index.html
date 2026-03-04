@@ -207,7 +207,7 @@ let _needsFirebaseSync=false;
 function loadCachedData(){
     _needsFirebaseSync=checkDataVersion();
     const ca=lsLoad('accounts');if(ca){accounts=ca;renderAccounts();}
-    const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.values(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
+    const ct=lsLoad('transactions');if(ct){transactions=markTransactions(Object.entries(ct)).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLedger();}
     // Room DB 우선: NativeBridge 있으면 Room에서 settle/sfa 로드
     let roomLoaded=false;
     if(typeof NativeBridge!=='undefined'){
@@ -230,7 +230,9 @@ function loadCachedData(){
 
 // --- 거래 마킹: 이체/중복은 _excluded + _reason 표시, 합산 제외 ---
 function markTransactions(txList){
-    const sorted=[...txList].sort((a,b)=>(a.ts||0)-(b.ts||0));
+    // entries 형식이면 [key,value] → {_id:key, ...value} 변환
+    const list=txList.map(t=>Array.isArray(t)?{...t[1],_id:t[0]}:t);
+    const sorted=[...list].sort((a,b)=>(a.ts||0)-(b.ts||0));
     // 1) 동일계좌 이체 (동일금액+5분내+다른은행+입출금반대)
     for(let i=0;i<sorted.length;i++){
         for(let j=i+1;j<sorted.length;j++){
@@ -306,7 +308,7 @@ function initSSE(){
     connectSSE('/banktotal/transactions',d=>{
         if(!d){transactions=[];renderLedger();return;}
         const prev=transactions.length;
-        transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        transactions=markTransactions(Object.entries(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));
         lsCache('transactions',d);
         renderLedger();
         // 새 출금 거래 발생 시 당일 정산 자동확인 + AI 보정
@@ -497,12 +499,25 @@ function renderLedger(){
             const tag=t._reason?`<span class="tx-excluded-tag">${t._reason}</span>`:'';
             html+=`<div class="tx-item ${excCls}">
                 <div class="tx-left"><span class="tx-cp">${t.counterparty||t.bank||''}${tag}</span><span class="tx-time">${timeFmt(t.ts)} ${t.bank||''}</span></div>
-                <div><div class="tx-amount ${isIn?'in':'out'}">${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance" style="color:${(t.balance||0)>0?'#4fc3f7':(t.balance||0)<0?'#ef5350':'#e0e0e0'}">잔액 ${fmt(t.balance)}</div></div>
+                <div><div class="tx-amount ${isIn?'in':'out'}" ${t._id?`onclick="editTxAmount('${t._id}',${t.amount})" style="cursor:pointer"`:''}>${isIn?'+':'-'}${fmt(t.amount)}</div><div class="tx-balance" style="color:${(t.balance||0)>0?'#4fc3f7':(t.balance||0)<0?'#ef5350':'#e0e0e0'}">잔액 ${fmt(t.balance)}</div></div>
             </div>`;
         });
         html+='</div>';
     }
     el.innerHTML=html;
+}
+
+function editTxAmount(id,cur){
+    const v=prompt('금액 수정',cur);
+    if(v===null)return;
+    const amt=parseInt(v.replace(/[^0-9]/g,''),10)||0;
+    if(amt===cur||amt<=0)return;
+    fetch(FB+'/banktotal/transactions/'+id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt})});
+    const tx=transactions.find(t=>t._id===id);
+    if(tx){tx.amount=amt;}
+    markLocalEdit();
+    renderLedger();
+    btLog('[EDIT]',`거래 금액 수정: ${cur}→${amt}`);
 }
 
 function renderCategory(withdrawals){
@@ -1789,7 +1804,7 @@ function doRefresh(){
         if(d){accounts=d;lsCache('accounts',accounts);renderAccounts();autoSyncSfaDaily();if(currentTab==='settle')renderSettle();}
     }).catch(()=>{});
     fetch(FB+'/banktotal/transactions.json').then(r=>r.json()).then(d=>{
-        if(d){transactions=markTransactions(Object.values(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));lsCache('transactions',d);renderLedger();}
+        if(d){transactions=markTransactions(Object.entries(d)).sort((a,b)=>(b.ts||0)-(a.ts||0));lsCache('transactions',d);renderLedger();}
     }).catch(()=>{});
     fetch(FB+'/banktotal/logs.json').then(r=>r.json()).then(d=>{
         if(d){logs=Object.values(d).sort((a,b)=>(b.ts||0)-(a.ts||0));renderLogs();}

@@ -1881,23 +1881,13 @@ window.onload=function(){
     loadAiKey();
     try{const v=NativeBridge.getAppVersion();if(v)document.getElementById('appVer').textContent='v'+v;}catch(e){}
 
-    // AI 입력: Enter 전송 (한글 조합 중에도 한 번으로 전송)
+    // AI 입력: Enter 전송 (IME 조합 중 아닌 경우만)
     var _composing=false;
-    var _enterDurCompose=false;
     var ai=document.getElementById('aiInput');
     if(ai){
-        ai.addEventListener('compositionstart',function(){_composing=true;_enterDurCompose=false});
-        ai.addEventListener('compositionend',function(){
-            _composing=false;
-            if(_enterDurCompose){_enterDurCompose=false;setTimeout(function(){askAi()},50);}
-        });
-        ai.addEventListener('keydown',function(e){
-            if(e.key==='Enter'){
-                e.preventDefault();
-                if(_composing){_enterDurCompose=true;}
-                else{askAi();}
-            }
-        });
+        ai.addEventListener('compositionstart',function(){_composing=true});
+        ai.addEventListener('compositionend',function(){_composing=false});
+        ai.addEventListener('keydown',function(e){if(!_composing&&e.key==='Enter'){e.preventDefault();askAi();}});
     }
     // 앱에서 호출할 수 있는 리프레시 함수
     window.refreshFromNative=function(){loadFromNative();};

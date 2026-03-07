@@ -26,6 +26,40 @@ object FirebaseMigrationHelper {
     private const val PREFS = "banktotal_prefs"
     private const val KEY_MIGRATED = "v3_migrated"
 
+    /** 매 앱 시작 시 물류/SFA 항목이 Room에 있는지 확인, 없으면 Firebase에서 가져옴 */
+    suspend fun syncSfaSettleItems(context: Context) {
+        try {
+            val db = BankDatabase.getInstance(context)
+            val dao = db.settleItemDao()
+            val existing = dao.getAllSync().filter { it.name == "물류" || it.name == "SFA" }
+            if (existing.isNotEmpty()) return
+
+            LogWriter.sys("물류/SFA 항목 누락 — Firebase에서 동기화")
+            val json = fetchJson("$FB/banktotal/settle/manual.json") ?: return
+            val keys = json.keys()
+            var count = 0
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val obj = json.optJSONObject(k) ?: continue
+                val name = obj.optString("name", "")
+                if (name != "물류" && name != "SFA") continue
+                dao.insert(SettleItemEntity(
+                    id = k, name = name,
+                    amount = obj.optLong("amount", 0),
+                    type = obj.optString("type", "출금"),
+                    cycle = obj.optString("cycle", "none"),
+                    dayOfMonth = obj.optInt("dayOfMonth", 1),
+                    dayOfWeek = obj.optInt("dayOfWeek", 0),
+                    date = null, source = "manual", isBlock = true
+                ))
+                count++
+            }
+            if (count > 0) LogWriter.sys("물류/SFA 항목 ${count}건 동기화 완료")
+        } catch (e: Exception) {
+            LogWriter.err("물류/SFA 동기화 실패: ${e.message}")
+        }
+    }
+
     suspend fun migrateIfNeeded(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_MIGRATED, false)) return

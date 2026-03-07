@@ -68,9 +68,16 @@ class MainActivity : AppCompatActivity() {
         requestPermissions()
         BalanceNotificationHelper.update(this)
         GeminiService.init(this)
+        // 크래시 로깅
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            LogWriter.err("크래시: ${throwable.message}\n${throwable.stackTraceToString().take(500)}")
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
         CoroutineScope(Dispatchers.IO).launch {
             GeminiService.loadKeyFromFirebase()
             FirebaseMigrationHelper.migrateIfNeeded(applicationContext)
+            FirebaseMigrationHelper.syncSfaSettleItems(applicationContext)
         }
         LogWriter.sys("앱 시작")
     }

@@ -43,6 +43,7 @@ class BlockAmountAccessibilityService : AccessibilityService() {
     @Volatile private var periodicRunning = false
     private var periodicThread: Thread? = null
     private val PERIODIC_INTERVAL = 60_000L // 60초마다 강제 읽기
+    private var lastOcrRejectLog = 0L // OCR 로그 스팸 방지
 
     override fun onServiceConnected() {
         instance = this
@@ -201,7 +202,11 @@ class BlockAmountAccessibilityService : AccessibilityService() {
      */
     private fun validateAmount(amount: Long): Long? {
         if (lastSavedAmount > 100_000 && amount < lastSavedAmount / 10) {
-            log("OCR 의심 무시: ${amount}원 (이전 ${lastSavedAmount}원의 ${amount * 100 / lastSavedAmount}%)")
+            val now = System.currentTimeMillis()
+            if (now - lastOcrRejectLog > 60_000) { // 1분에 1번만 로그
+                log("OCR 의심 무시: ${amount}원 (이전 ${lastSavedAmount}원)")
+                lastOcrRejectLog = now
+            }
             return null
         }
         return amount

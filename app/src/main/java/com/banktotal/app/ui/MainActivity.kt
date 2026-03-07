@@ -24,6 +24,8 @@ import com.banktotal.app.data.db.SettleItemEntity
 import com.banktotal.app.data.db.SettleItemStateEntity
 import com.banktotal.app.data.db.SfaDailyEntity
 import com.banktotal.app.data.repository.SettleRepository
+import com.banktotal.app.service.AppMonitor
+import com.banktotal.app.service.GithubUpdater
 import com.banktotal.app.service.BalanceNotificationHelper
 import com.banktotal.app.service.FirebaseBackupWriter
 import com.banktotal.app.service.FirebaseMigrationHelper
@@ -61,6 +63,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppMonitor.init(this)
+        val ver = packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+        GithubUpdater.check(this, ver)
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
